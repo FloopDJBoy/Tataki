@@ -12,12 +12,12 @@ namespace Engine {
     void Engine::go(const SearchLimits& limits)
     {
         stop();
-        auto book_move = book[position];
-        if (book_move!= ChessCore::Move::none()) {
-            best_move_ = book_move;
-            finish_search();
-            return;
-        }
+        //auto book_move = book[position];
+        //if (book_move!= ChessCore::Move::none()) {
+        //    best_move_ = book_move;
+        //    finish_search();
+        //    return;
+        //}
         searcher = std::make_unique<Search>(position, limits);
 
         searching.store(true);

@@ -4,9 +4,12 @@
 
 #include "TranspositionTable.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace Engine {
+    TranspositionTable::TranspositionTable(): tt(std::make_unique<TTEntry[]>(NUM_BUCKETS * BUCKET_SIZE))
+    {}
     int TranspositionTable::replacement_score(const TTEntry &e) const {
         // Unsigned 8-bit underflow naturally handles generation wrap-around
         const uint8_t age_diff = generation - e.age;
@@ -70,6 +73,10 @@ namespace Engine {
     }
     void TranspositionTable::clear() {
         generation = 0;
-        std::ranges::fill(tt, TTEntry{});
+        std::ranges::fill(
+            tt.get(),
+            tt.get() + NUM_BUCKETS * BUCKET_SIZE,
+            TTEntry{}
+        );
     }
 } // Engine

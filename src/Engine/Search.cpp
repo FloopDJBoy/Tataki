@@ -3,6 +3,9 @@
 //
 
 #include "Search.h"
+
+#include <iostream>
+
 #include "Eval.h"
 namespace Engine {
     using namespace ChessCore;
@@ -51,6 +54,8 @@ namespace Engine {
     }
     template <bool in_check>
     Score Search::quiesce(Score alpha, Score beta, SearchStack *ss) {
+        assert(ss >= stack);
+        assert(ss < stack + std::size(stack));
         if ((++nodes & 1023) == 0) {
             if (should_stop()) {
                 stop_search();
@@ -139,6 +144,9 @@ namespace Engine {
 
     Score Search::alpha_beta(Score alpha, const Score beta, const int depth, SearchStack* ss) {
 
+
+        assert(index >= 0);
+        assert(index < static_cast<std::ptrdiff_t>(std::size(stack)));
         if ((++nodes & 1023) == 0) {
             if (should_stop()) {
                 stop_search();
@@ -158,7 +166,7 @@ namespace Engine {
             return quiesce<false>(alpha,beta,ss+1);
         }
         const Key zobrist_key = pos.zobrist_key();
-        const auto tt_entry = (*tt)[zobrist_key];
+        const auto tt_entry = tt[zobrist_key];
         Move tt_move = Move::none();
         Score original_alpha = alpha;
         if (tt_entry) {
@@ -191,7 +199,7 @@ namespace Engine {
 
         auto moves = pos.legal_moves();
         const int move_count = moves.size();
-        int scores[256];
+        std::array<int, 256> scores{};
 
         for (int i = 0; i < move_count; ++i) {
             scores[i] = score_move(pos, moves[i], pv_move);
@@ -241,7 +249,7 @@ namespace Engine {
             bound = Bound::LOWER;
         else
             bound = Bound::EXACT;
-        tt->insert(pos.zobrist_key(), best_score, depth, best_move, bound);
+        tt.insert(zobrist_key, best_score, depth, best_move, bound);
         if (!found_move) {
             if (pos.in_check()) {
                 return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
@@ -296,7 +304,6 @@ namespace Engine {
         constexpr Score beta = Eval::INF;
 
         ss->pv.clear();
-
         for (const auto move : pos.legal_moves()) {
             pos.make_move(move);
             Score score = -alpha_beta(-beta, -alpha, depth - 1, ss + 1);
@@ -321,7 +328,7 @@ namespace Engine {
         nodes = 0;
         stop = false;
         Move best_move = Move::none();
-        tt->new_search();
+        tt.new_search();
         search_deadline = Clock::now() + calculate_time_limit();
         for (int depth =1; ;++depth) {
             SearchStack* ss = stack; // Start at the root of the stack array

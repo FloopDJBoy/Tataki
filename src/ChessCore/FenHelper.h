@@ -39,7 +39,7 @@ namespace ChessCore::FenHelper {
         Square index = 56;
         auto rows_view = get_x_split(0,fen) |
             std::views::split('/') |
-            std::views::transform([](auto&& r){return string_view(r.begin(),std::ranges::distance(r));});
+            std::views::transform([](auto&& r){return string_view(&*r.begin(),std::ranges::distance(r));});
         std::vector<string_view> rows;
         for (auto&& r : rows_view) rows.push_back(r);
         for (auto& row : rows) {

@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string>
 
-#include "Uci.h"
+#include "UCI.h"
 #include "ChessCore/FenHelper.h"
 #include "ChessCore/Move.h"
 #include "ChessCore/Position.h"

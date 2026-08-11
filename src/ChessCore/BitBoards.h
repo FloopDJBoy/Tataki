@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <bit>
 #include "PrecomputedMagics.h"
 #include "Types.h"
 namespace ChessCore::BitBoards {
@@ -228,18 +229,24 @@ namespace ChessCore::BitBoards {
         return attack;
     }
     template<PieceType Pt>
-    constexpr auto make_magic_arr() {
-        static_assert(Pt == PieceType::BISHOP || Pt == PieceType::ROOK,"magic can only be bishops or rooks");
+    auto& make_magic_arr() {
+        static_assert(
+            Pt == PieceType::BISHOP || Pt == PieceType::ROOK,
+            "magic can only be bishops or rooks"
+        );
+
         if constexpr (Pt == PieceType::BISHOP) {
-            return std::array<std::array<BitBoard,512>,64>{};
-        }else {
-            return std::array<std::array<BitBoard,4096>,64>{};
+            static std::array<std::array<BitBoard, 512>, 64> attacks{};
+            return attacks;
+        } else {
+            static std::array<std::array<BitBoard, 4096>, 64> attacks{};
+            return attacks;
         }
     }
     template<PieceType Pt>
-    constexpr auto make_slider_attacks(const std::array<BitBoard,64>& occupancies,const std::array<std::pair<int, int>, 4> &moves,const std::array<BitBoard,64> &magic,const std::array<int,64> &shifts) {
+    auto make_slider_attacks(const std::array<BitBoard,64>& occupancies,const std::array<std::pair<int, int>, 4> &moves,const std::array<BitBoard,64> &magic,const std::array<int,64> &shifts) {
         static_assert(Pt == PieceType::BISHOP || Pt == PieceType::ROOK,"magic can only be bishops or rooks");
-        auto attacks = make_magic_arr<Pt>();
+        auto& attacks = make_magic_arr<Pt>();
         for (Square square = 0; square < 64; square++) {
             const BitBoard occupancy = occupancies[square];
             auto variations = generate_occupancy_variations<Pt>(occupancy);

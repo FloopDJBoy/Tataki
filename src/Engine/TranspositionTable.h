@@ -4,6 +4,8 @@
 
 #ifndef CHESSENGINE_TRANSPOSITIONTABLE_H
 #define CHESSENGINE_TRANSPOSITIONTABLE_H
+#include <memory>
+
 #include "ChessCore/Move.h"
 
 namespace Engine {
@@ -28,11 +30,11 @@ namespace Engine {
         constexpr static Value w_bound = 2;
         constexpr static Value w_age = 8;
 
-        TTEntry tt[NUM_BUCKETS*BUCKET_SIZE]{};
+        std::unique_ptr<TTEntry[]> tt;
         uint8_t generation = 0;
         public:
         int replacement_score(const TTEntry& e) const;
-        TranspositionTable() =default;
+        TranspositionTable();
         TTEntry* operator [](Key key);
         void insert(Key key,Score score,int16_t depth ,ChessCore::Move best_move,Bound bound);
         void new_search() {

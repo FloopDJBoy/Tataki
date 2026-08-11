@@ -16,6 +16,30 @@ namespace ChessCore {
     using Pieces::makePiece;
     using namespace Engine;
     //move is assume legal
+    Position::Position(const Board board,const CastlingRight cr,const Square ep,const Color side,const int half_clock) : board(board),side_to_move_(side),ply_(0) {
+        current_state_.castling_rights = cr;
+        current_state_.ep_square = ep;
+        current_state_.half_clock = half_clock;
+        update_slider_blockers(Color::WHITE);
+        update_slider_blockers(Color::BLACK);
+        check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
+        current_state_.zobrist_key = zobrist_key(true);
+
+        for (Color c : {Color::WHITE, Color::BLACK}) {
+            BitBoard bb = color_bb(c);
+            while (bb) {
+                const Square s = BitBoards::pop_lsb(bb);
+                const Piece p = square(s);
+                const auto ci = color_idx(c);
+
+                current_state_.material_score[ci] +=
+                    Eval::material_value(Pieces::getType(p));
+
+                current_state_.pst_score[ci] +=
+                    Eval::pst_value(p, s);
+            }
+        }
+    }
     void Position::make_move(const Move move) {
 
         const Square from = move.from();
@@ -247,7 +271,7 @@ namespace ChessCore {
     bool Position::legal(Move move) const {
         const Square from = move.from();
         const Square to = move.to();
-        auto cb =  color_bb(~side_to_move());
+        //auto cb =  color_bb(~side_to_move());
 
         if (move.get_type() == MoveType::CASTLING) {
             const auto dir = (to - from)<0 ? -1 : 1;

@@ -70,7 +70,7 @@ namespace Engine {
         constexpr static int search_time_margin=100;
         std::atomic_bool stop{false};
         SearchStack stack[PV::MAX_PLY + 10];
-        std::unique_ptr<TranspositionTable> tt;
+        TranspositionTable tt;
         Score alpha_beta(Score alpha, Score beta,int depth,SearchStack* ss);
         [[nodiscard]] bool should_stop() const;
         template <bool in_check>
@@ -80,7 +80,7 @@ namespace Engine {
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
         public:
         void stop_search() {stop.store(true,std::memory_order_relaxed);}
-        Search(const ChessCore::Position &p,const SearchLimits& search_limits) :pos(p.copy_for_search()),limits(search_limits) {tt = std::make_unique<TranspositionTable>();};
+        Search(const ChessCore::Position &p,const SearchLimits& search_limits) :pos(p.copy_for_search()),limits(search_limits) {};
 
         ChessCore::Move find_best_move();
 

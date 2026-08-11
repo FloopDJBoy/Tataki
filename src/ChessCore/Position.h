@@ -37,20 +37,11 @@ namespace ChessCore {
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
         public:
         explicit Position(
-            const Board board,
-            const CastlingRight cr,
-            const Square ep,
-            const Color side,
-            const int half_clock) : board(board),side_to_move_(side),ply_(0)
-        {
-            current_state_.castling_rights = cr;
-            current_state_.ep_square = ep;
-            current_state_.half_clock = half_clock;
-            update_slider_blockers(Color::WHITE);
-            update_slider_blockers(Color::BLACK);
-            check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
-            current_state_.zobrist_key = zobrist_key(true);
-        }
+            Board board,
+            CastlingRight cr,
+            Square ep,
+            Color side,
+            int half_clock);
         [[nodiscard]] Position copy_for_search() const
         {
             Position p(*this);
@@ -99,7 +90,7 @@ namespace ChessCore {
         template<MoveGen::GenType type>
         [[nodiscard]] auto generate_moves() const {return MoveGen::MoveList<type>(*this);}
         [[nodiscard]] bool in_check() const {return checkers();}
-        [[nodiscard]] bool zobrist_key() const {return zobrist_key(false);}
+        [[nodiscard]] Key zobrist_key() const {return zobrist_key(false);}
         [[nodiscard]] bool is_3fold() const {return repetition >= 2;}
         void verify_zobrist() const {assert(current_state_.zobrist_key == zobrist_key(true));}
         [[nodiscard]] int ply() const {return ply_;}
