@@ -35,9 +35,14 @@ namespace ChessCore::MoveGen {
         public:
         [[nodiscard]] const Move* begin() const {return moveList;}
         [[nodiscard]] const Move* end() const {return last;}
+        [[nodiscard]] Move* begin() {return moveList;}
+        [[nodiscard]] Move* end() {return last;}
+        Move& operator[](const uint16_t index) { return moveList[index]; }
+        const Move& operator[](const uint16_t index) const { return moveList[index]; }
         [[nodiscard]] uint16_t size() const {return last-moveList;}
         [[nodiscard]] bool contains(const Move m) const {return std::find(begin(),end(),m) != end();}
         explicit MoveList(const Position& pos) : last(generate<genType>(pos,moveList)) {};
+        [[nodiscard]] bool empty() const {return last == moveList;}
         MoveList(const MoveList&) = delete;
         MoveList& operator=(const MoveList&) = delete;
 

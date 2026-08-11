@@ -14,11 +14,11 @@ namespace ChessCore {
     // bit 12-13: promotion piece type - 2 (from KNIGHT-2 to QUEEN-2)
     // bit 14-15: special move flag: promotion (1), en passant (2), castling (3)
     class Move {
+        uint16_t data;
         static constexpr uint16_t TO_MASK   = 0x3F;
         static constexpr uint16_t FROM_MASK = 0xFC0;
         static constexpr uint16_t PROMO_MASK = 0x3000;
         static constexpr uint16_t TYPE_MASK = 0xC000;
-        uint16_t data;
         public:
         Move() = default;
         explicit constexpr Move(const uint16_t data) : data(data) {}

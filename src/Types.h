@@ -78,10 +78,26 @@ enum class MoveType : uint16_t {
     EN_PASSANT = 2 << 14,
     CASTLING   = 3 << 14
 };
+class SplitMix64 {
+    uint64_t state;
+
+public:
+    explicit constexpr SplitMix64(const uint64_t seed) : state(seed) {}
+
+    constexpr  uint64_t next() {
+        uint64_t z = (state += 0x9e3779b97f4a7c15ULL);
+        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+        z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+        return z ^ (z >> 31);
+    }
+};
+
 using Piece = uint8_t;
 using Square = uint8_t;
 using BitBoard = uint64_t;
-
+using Key = uint64_t;
+using Score = int16_t;
+using Value = uint32_t;
 
 constexpr Square NO_SQUARE = 255;
 enum SquareName : Square {
@@ -93,6 +109,11 @@ enum SquareName : Square {
     a6,b6,c6,d6,e6,f6,g6,h6,
     a7,b7,c7,d7,e7,f7,g7,h7,
     a8,b8,c8,d8,e8,f8,g8,h8
+};
+enum class Bound : uint8_t{
+    EXACT,
+    LOWER,
+    UPPER
 };
 
 

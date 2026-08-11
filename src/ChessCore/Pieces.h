@@ -88,6 +88,47 @@ namespace ChessCore::Pieces {
                 throw std::invalid_argument("invalid piece symbol");
         }
     }
+    constexpr int polyglot_index(const Piece p) {
+        switch (p) {
+            case WHITE_PAWN:   return 0;
+            case WHITE_KNIGHT: return 1;
+            case WHITE_BISHOP: return 2;
+            case WHITE_ROOK:   return 3;
+            case WHITE_QUEEN:  return 4;
+            case WHITE_KING:   return 5;
+
+            case BLACK_PAWN:   return 6;
+            case BLACK_KNIGHT: return 7;
+            case BLACK_BISHOP: return 8;
+            case BLACK_ROOK:   return 9;
+            case BLACK_QUEEN:  return 10;
+            case BLACK_KING:   return 11;
+
+            default: return -1; // EMPTY or invalid piece
+        }
+    }
+    constexpr Piece from_polyglot_index(const int index) {
+        switch (index) {
+            case 0:  return WHITE_PAWN;
+            case 1:  return WHITE_KNIGHT;
+            case 2:  return WHITE_BISHOP;
+            case 3:  return WHITE_ROOK;
+            case 4:  return WHITE_QUEEN;
+            case 5:  return WHITE_KING;
+
+            case 6:  return BLACK_PAWN;
+            case 7:  return BLACK_KNIGHT;
+            case 8:  return BLACK_BISHOP;
+            case 9:  return BLACK_ROOK;
+            case 10: return BLACK_QUEEN;
+            case 11: return BLACK_KING;
+
+            default: return EMPTY;
+        }
+    }
+    constexpr Piece zobrist_index(const Piece p) {
+        return polyglot_index(p);
+    }
 
 
 

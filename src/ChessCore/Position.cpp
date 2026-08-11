@@ -3,67 +3,95 @@
 //
 
 #include "Position.h"
+
+#include "magic_enum.hpp"
 #include "Types.h"
 #include "MoveGen.h"
+#include "Engine/Zobrist.h"
+#include "Engine/Eval.h"
+#include "Engine/OpeningBook.h"
+
 namespace ChessCore {
     using enum PieceType;
     using Pieces::makePiece;
+    using namespace Engine;
     //move is assume legal
     void Position::make_move(const Move move) {
 
         const Square from = move.from();
         const Square to = move.to();
-        const Color stm = side_to_move();
+        const Color us = side_to_move();
+        const Color them = ~us;
         const MoveType type = move.get_type();
-        const int offset = (stm == Color::WHITE) ? 8 : -8;
-        const auto captured = square(to);
+        const int offset = (us == Color::WHITE) ? 8 : -8;
+        const auto moving = square(from);
+        const Square captured_square = type == MoveType::EN_PASSANT ? to - offset : to;
+        const auto captured = type == MoveType::EN_PASSANT? Pieces::makePiece(PAWN,them)  : square(to);
 
-        auto& st = push_state(move,captured);
+        //ref to old state
+        const auto& st = push_state(move,captured);
+        Key& key = current_state_.zobrist_key;
 
         bool half_clock_move = captured != Pieces::EMPTY;
+
+        if (st.ep_square != NO_SQUARE)
+            key ^= Engine::Zobrist::ep_key(st.ep_square);
+        if (st.castling_rights != CastlingRight::None) {
+            key ^= Engine::Zobrist::castling_key(st.castling_rights);
+        }
         handle_castling_rights(move);
+
+        if (current_state_.castling_rights != CastlingRight::None)
+            key ^= Engine::Zobrist::castling_key(current_state_.castling_rights);
+
         board.move_piece(from, to);
 
         switch (type) {
             case MoveType::NORMAL:
                 break;
+            case MoveType::PROMOTION: {
 
-            case MoveType::PROMOTION:
                 half_clock_move = true;
-                board.remove_piece(to);
-                board.set_piece(to, makePiece(move.promotion_type(), stm));
-                break;
+                const auto promo =  makePiece(move.promotion_type(), us);
+                key ^= Engine::Zobrist::piece_key(moving, from);
+                key ^= Engine::Zobrist::piece_key(promo, to);
 
+                board.remove_piece(to);
+                board.set_piece(to,promo);
+                current_state_.material_score[color_idx(us)] += -Eval::material_value(PAWN) + Eval::material_value(move.promotion_type());
+                current_state_.pst_score[color_idx(us)] += -Eval::pst_value(moving,from) + Eval::pst_value(promo,to);
+                break;
+            }
             case MoveType::CASTLING: {
                 assert(from == e1 ||from == e8);
-                assert(
-                    to == g1 ||
-                    to == c1 ||
-                    to == g8 ||
-                    to == c8
-                );
+                assert(to == g1 ||to == c1 ||to == g8 ||to == c8);
                 const Square rook_start =
                     from == e1 ? (to == g1 ? h1 : a1)
                                : (to == g8 ? h8 : a8);
 
                 const Square rook_end =
-                    stm == Color::WHITE
+                    us == Color::WHITE
                         ? (rook_start == a1 ? d1 : f1)
                         : (rook_start == a8 ? d8 : f8);
 
                 assert(Pieces::getType(square(rook_start)) == PieceType::ROOK);
 
+
                 board.remove_piece(rook_start);
-                board.set_piece(rook_end, Pieces::makePiece(PieceType::ROOK, stm));
+                board.set_piece(rook_end, Pieces::makePiece(PieceType::ROOK, us));
+                const Piece rook = Pieces::makePiece(PieceType::ROOK, us);
+                current_state_.pst_score[color_idx(us)] +=
+                    Eval::pst_value(rook, rook_end) -
+                    Eval::pst_value(rook, rook_start);
+                key ^= Engine::Zobrist::piece_key(rook, rook_start);
+                key ^= Engine::Zobrist::piece_key(rook, rook_end);
                 break;
             }
-
-            case MoveType::EN_PASSANT:
+            case MoveType::EN_PASSANT: {
                 half_clock_move = true;
                 board.remove_piece(to - offset);
-                st.captured = makePiece(PAWN,~side_to_move());
-
                 break;
+            }
         }
 
         if (Pieces::getType(square(to)) == PAWN) {
@@ -72,11 +100,22 @@ namespace ChessCore {
         } else {
             current_state_.ep_square = NO_SQUARE;
         }
-
+        if (current_state_.ep_square != NO_SQUARE)
+            key ^= Engine::Zobrist::ep_key(current_state_.ep_square);
 
         current_state_.half_clock = half_clock_move ? 0 : current_state_.half_clock + 1;
-
+        if (captured != Pieces::EMPTY) {
+            key ^= Zobrist::piece_key(captured, captured_square);
+            current_state_.material_score[color_idx(them)] -= Eval::material_value(Pieces::getType(captured));
+            current_state_.pst_score[color_idx(them)] -= Eval::pst_value(captured,captured_square);
+        }
+        if (type != MoveType::PROMOTION) {
+            current_state_.pst_score[color_idx(us)] += Eval::pst_value(moving,to) - Eval::pst_value(moving,from);
+            key ^= Zobrist::piece_key(moving, from);
+            key ^= Zobrist::piece_key(moving, to);
+        }
         swap_side();
+        key ^= Engine::Zobrist::tables.side_to_move;
         update_slider_blockers(side_to_move());
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
                    color_bb(~side_to_move());
@@ -146,7 +185,6 @@ namespace ChessCore {
             }
 
         update_slider_blockers(side_to_move());
-
         check_bb = attackers_to(
             king_square(side_to_move()),
             all_bb()
@@ -216,7 +254,7 @@ namespace ChessCore {
         }
         return !(blockers_for_king(side_to_move()) & BitBoards::make_bitboard(from)) || (BitBoards::line_bb[from][to]) & piece_bb(PieceType::KING,side_to_move());
     }
-    inline StateInfo& Position::push_state(Move move, Piece captured)
+    inline const StateInfo& Position::push_state(Move move, Piece captured)
     {
         StateInfo& st = history[ply_++];
         st = current_state_;
@@ -273,5 +311,119 @@ namespace ChessCore {
             (BitBoards::get_attacks_bb<PieceType::KNIGHT>(s) & piece_bb(PieceType::KNIGHT))
             |
             (BitBoards::get_attacks_bb<PieceType::KING>(s) & piece_bb(PieceType::KING));
+    }
+    Move Position::parse_move(const std::string& move_string) const {
+        auto from_name = magic_enum::enum_cast<SquareName>(move_string.substr(0,2));
+        auto to_name   = magic_enum::enum_cast<SquareName>(move_string.substr(2,2));
+
+        if (!from_name || !to_name)
+            return Move::none();
+
+        Square from = *from_name;
+        Square to   = *to_name;
+
+        PieceType promo = EMPTY;
+
+        if (move_string.size() == 5)
+            promo = Pieces::getType(Pieces::symbol_to_piece(move_string[4]));
+
+        return parse_move(from, to, promo);
+    }
+    Move Position::parse_move(const Square from, const Square to,const PieceType promo) const {
+        if (promo != EMPTY) {
+            return Move::make(from, to, promo);
+        }
+
+        // Castling
+        if (Pieces::getType(square(from)) == KING) {
+            if (abs(to - from) == 2)
+                return Move::make<MoveType::CASTLING>(from, to);
+        }
+
+        // En passant
+        if (Pieces::getType(square(from)) == PAWN) {
+            if (to == ep_square())
+                return Move::make<MoveType::EN_PASSANT>(from, to);
+        }
+
+        return Move(from, to);
+    }
+    Key Position::polyglot_hash() const {
+        Key key = 0;
+
+        // Pieces
+        for (Square s = 0; s < 64; ++s) {
+            Piece p = square(s);
+
+            if (p != Pieces::EMPTY) {
+                const int index = Pieces::polyglot_index(p);
+                key ^= OpeningBook::OpeningBook::POLYGLOT_RANDOM[64 * index + s];
+            }
+        }
+
+        // Castling rights
+        if (can_castle_kingside<Color::WHITE>())
+            key ^= OpeningBook::POLYGLOT_RANDOM[768];
+
+        if (can_castle_queenside<Color::WHITE>())
+            key ^= OpeningBook::POLYGLOT_RANDOM[769];
+
+        if (can_castle_kingside<Color::BLACK>())
+            key ^= OpeningBook::POLYGLOT_RANDOM[770];
+
+        if (can_castle_queenside<Color::BLACK>())
+            key ^= OpeningBook::POLYGLOT_RANDOM[771];
+
+        // En passant
+        if (ep_square() != NO_SQUARE)
+            key ^= OpeningBook::POLYGLOT_RANDOM[772 + BitBoards::file_of(ep_square())];
+
+        // Side to move
+        if (side_to_move() == Color::BLACK)
+            key ^= OpeningBook::POLYGLOT_RANDOM[780];
+
+        return key;
+    }
+
+    Key Position::zobrist_key(const bool from_scratch) const {
+        if (!from_scratch) {
+            return state().zobrist_key;
+        }
+        Key key = 0;
+
+        // Pieces
+        for (Square s = 0; s < 64; ++s) {
+            const Piece p = square(s);
+
+            if (p != Pieces::EMPTY) {
+                const int index = Pieces::polyglot_index(p);
+                key ^= Zobrist::tables.piece[64 * index + s];
+            }
+        }
+
+        // Castling rights
+        if (can_castle_kingside<Color::WHITE>())
+            key ^= Zobrist::tables.castling[0];
+
+        if (can_castle_queenside<Color::WHITE>())
+            key ^= Zobrist::tables.castling[1];
+
+        if (can_castle_kingside<Color::BLACK>())
+            key ^= Zobrist::tables.castling[2];
+
+        if (can_castle_queenside<Color::BLACK>())
+            key ^= Zobrist::tables.castling[3];
+
+        // En passant
+        if (ep_square() != NO_SQUARE)
+            key ^= Zobrist::tables.en_passant[
+                BitBoards::file_of(ep_square())
+            ];
+
+        // Side to move
+        if (side_to_move() == Color::BLACK)
+            key ^= Zobrist::tables.side_to_move;
+
+        return key;
     }
 } // ChessCore

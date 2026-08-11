@@ -34,6 +34,20 @@ add_executable(chessEngine src/main.cpp
         src/ChessCore/MoveGen.h
         src/ChessCore/preft.cpp
         src/ChessCore/preft.h
+        src/Engine/Search.cpp
+        src/Engine/Search.h
+        src/Uci.cpp
+        src/Uci.h
+        src/Engine/OpeningBook.cpp
+        src/Engine/OpeningBook.h
+        src/Engine/Engine.cpp
+        src/Engine/Engine.h
+        src/Engine/SearchLimits.h
+        src/Engine/Eval.cpp
+        src/Engine/Eval.h
+        src/Engine/TranspositionTable.cpp
+        src/Engine/TranspositionTable.h
+        src/Engine/Zobrist.h
 )
 target_include_directories( chessEngine PRIVATE
         ${PROJECT_SOURCE_DIR}/external
@@ -45,7 +59,26 @@ target_link_libraries(chessEngine
         Qt::Widgets
         Qt6::Svg
 )
+add_custom_command(TARGET chessEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:chessEngine>/assets"
+)
+get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
 
+add_custom_command(TARGET chessEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MINGW_BIN_DIR}/libgcc_s_seh-1.dll"
+        "$<TARGET_FILE_DIR:chessEngine>"
+
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MINGW_BIN_DIR}/libstdc++-6.dll"
+        "$<TARGET_FILE_DIR:chessEngine>"
+
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MINGW_BIN_DIR}/libwinpthread-1.dll"
+        "$<TARGET_FILE_DIR:chessEngine>"
+)
 if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(DEBUG_SUFFIX)
     if (MSVC AND CMAKE_BUILD_TYPE MATCHES "Debug")

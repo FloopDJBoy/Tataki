@@ -79,6 +79,10 @@ namespace ChessCore::BitBoards {
     constexpr Square lsb(const BitBoard bb) {
         return std::countr_zero(bb);
     }
+    constexpr int file_of(const Square s) {
+        return s%8;
+    }
+
 
     constexpr std::array<std::pair<int, int>, 8> knight_jumps = {{
         {2, 1}, {1, 2}, {-1, 2}, {-2, 1},

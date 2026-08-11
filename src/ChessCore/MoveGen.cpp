@@ -16,17 +16,23 @@ namespace ChessCore::MoveGen {
         }
     }
     namespace {
+        template<GenType type,bool capture>
         [[nodiscard]] inline Move* add_promotion_moves(Move* moveList, const Square from, const Square to) {
-            *moveList++ = Move::make(from,to,PieceType::QUEEN);
-            *moveList++ = Move::make(from,to,PieceType::ROOK);
-            *moveList++ = Move::make(from,to,PieceType::BISHOP);
-            *moveList++ = Move::make(from,to,PieceType::KNIGHT);
+            constexpr bool all  = type == GenType::EVASIONS || type == GenType::NON_EVASIONS;
+            if constexpr (type == GenType::CAPTURES || all) {
+                *moveList++ = Move::make(from,to,PieceType::QUEEN);
+            }
+            if ((type == GenType::CAPTURES && capture) || (type == GenType::QUIETS && !capture) || all ) {
+                *moveList++ = Move::make(from,to,PieceType::ROOK);
+                *moveList++ = Move::make(from,to,PieceType::BISHOP);
+                *moveList++ = Move::make(from,to,PieceType::KNIGHT);
+            }
             return moveList;
 
         }
     }
     namespace {
-        template<Color Side, BitBoards::Direction Dir,bool promo = false>
+        template<GenType type,Color Side, BitBoards::Direction Dir,bool promo = false,bool capture=false>
         [[nodiscard]] inline Move* add_pawn_move(Move* moveList, Square to)
         {
             constexpr int offset =
@@ -53,7 +59,7 @@ namespace ChessCore::MoveGen {
                     from = to + 7;
             }
             if constexpr(promo) {
-                return add_promotion_moves(moveList,from,to);
+                return add_promotion_moves<type,capture>(moveList,from,to);
             }
             *moveList++ = Move(from, to);
             return moveList;
@@ -70,16 +76,19 @@ namespace ChessCore::MoveGen {
 
             constexpr BitBoard promotion_rank = Side == Color::WHITE ? BitBoards::RANK_8 : BitBoards::RANK_1;
             constexpr BitBoard double_push_rank = Side == Color::WHITE ? BitBoards::RANK_3 : BitBoards::RANK_6;
+            constexpr BitBoard promo_start_rank = Side == Color::WHITE ? BitBoards::RANK_7 : BitBoards::RANK_2;
+            const BitBoard promo_pawns = pawns & promo_start_rank;
             //Pawn push
             if constexpr (type != GenType::CAPTURES) {
                 BitBoard pushed = BitBoards::shift_pawns<Side,BitBoards::Direction::UP>(pawns) & empty;
                 BitBoard dbl = BitBoards::shift_pawns<Side,BitBoards::Direction::UP>(pushed & double_push_rank) & empty;
-                BitBoard promotions = pushed & promotion_rank;
+
+                const BitBoard promotions = pushed & promotion_rank;
                 pushed &= ~promotions;
+
                 if constexpr (type == GenType::EVASIONS) {
                     pushed &= target;
                     dbl &= target;
-                    promotions &= target;
                 }
                 while (pushed) {
                     const Square to = BitBoards::pop_lsb(pushed);
@@ -89,45 +98,56 @@ namespace ChessCore::MoveGen {
                     const Square to = BitBoards::pop_lsb(dbl);
                     *moveList++ = Move(to-offset*2,to);
                 }
-                while (promotions) {
-                    const Square to = BitBoards::pop_lsb(promotions);
-                    moveList =  add_promotion_moves(moveList,to-offset,to);
+            }
+            if (promo_pawns) {
+                BitBoard right =  BitBoards::shift_pawns<Side,BitBoards::Direction::RIGHT>(promo_pawns) & enemies;
+                BitBoard left = BitBoards::shift_pawns<Side,BitBoards::Direction::LEFT>(promo_pawns) & enemies;
+                BitBoard up = BitBoards::shift_pawns<Side,BitBoards::Direction::UP>(promo_pawns) & empty;
+                if constexpr (type == GenType::EVASIONS) {
+                    right &= target;
+                    left &= target;
+                    up &= target;
+                }
+                while (left) {
+                    const Square to = BitBoards::pop_lsb(left);
+                    moveList = add_pawn_move<type,Side,BitBoards::Direction::LEFT,true,true>(moveList,to);
+                }
+                while (right) {
+                    const Square to = BitBoards::pop_lsb(right);
+                    moveList = add_pawn_move<type,Side,BitBoards::Direction::RIGHT,true,true>(moveList,to);
+                }
+                while (up) {
+                    const Square to = BitBoards::pop_lsb(up);
+                    moveList =  add_promotion_moves<type,false>(moveList,to-offset,to);
                 }
             }
+
             //pawn attacks
             if constexpr (type!=GenType::QUIETS) {
+
                 BitBoard attacks_left = BitBoards::shift_pawns<Side,BitBoards::Direction::LEFT>(pawns) & enemies;
                 BitBoard attacks_right = BitBoards::shift_pawns<Side,BitBoards::Direction::RIGHT>(pawns) & enemies;
+
+                const BitBoard promo_left = attacks_left & promotion_rank;
+                const BitBoard promo_right = attacks_right & promotion_rank;
+
+                attacks_left &= ~promo_left;
+                attacks_right &= ~promo_right;
 
                 if constexpr (type == GenType::EVASIONS) {
                     attacks_left &= target;
                     attacks_right &=target;
                 }
 
-                BitBoard promo_left = attacks_left & promotion_rank;
-                BitBoard promo_right = attacks_right & promotion_rank;
-
-                attacks_left &= ~promo_left;
-                attacks_right &= ~promo_right;
-
-
-
                 while (attacks_left) {
                     const Square to = BitBoards::pop_lsb(attacks_left);
-                    moveList = add_pawn_move<Side,BitBoards::Direction::LEFT>(moveList,to);
+                    moveList = add_pawn_move<type,Side,BitBoards::Direction::LEFT>(moveList,to);
                 }
                 while (attacks_right) {
                     const Square to = BitBoards::pop_lsb(attacks_right);
-                    moveList = add_pawn_move<Side,BitBoards::Direction::RIGHT>(moveList,to);
+                    moveList = add_pawn_move<type,Side,BitBoards::Direction::RIGHT>(moveList,to);
                 }
-                while (promo_left) {
-                    const Square to = BitBoards::pop_lsb(promo_left);
-                    moveList = add_pawn_move<Side,BitBoards::Direction::LEFT,true>(moveList,to);
-                }
-                while (promo_right) {
-                    const Square to = BitBoards::pop_lsb(promo_right);
-                    moveList = add_pawn_move<Side,BitBoards::Direction::RIGHT,true>(moveList,to);
-                }
+
                 if (ep_square != NO_SQUARE ) {
                     const BitBoard ep_bb = BitBoards::make_bitboard(ep_square);
                     BitBoard attackers =(BitBoards::shift_pawns<~Side,BitBoards::Direction::LEFT>(ep_bb) |BitBoards::shift_pawns<~Side,BitBoards::Direction::RIGHT>(ep_bb)) & pawns;

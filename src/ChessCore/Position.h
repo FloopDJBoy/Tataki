@@ -6,25 +6,34 @@
 #include "Move.h"
 #include "MoveGen.h"
 #include "Types.h"
+#include "Engine/Zobrist.h"
 
 namespace ChessCore {
     struct StateInfo {
+        Key zobrist_key;
+
+        //for undo
         Move move;
         Piece captured;
         Square ep_square;
         CastlingRight castling_rights;
         int half_clock;
+
+        //scoring
+        std::array<Value,2> pst_score;
+        std::array<Value,2> material_score;
     };
     class Position {
-        static constexpr int MAX_PLY = 512;
+        static constexpr int16_t MAX_PLY = 512;
         Board board;
         BitBoard check_bb = 0ull;
         std::array<BitBoard, 2> blockers_for_king_ = {0ull,0ull};
         StateInfo current_state_;
         std::array<StateInfo, MAX_PLY> history;
         Color side_to_move_ = Color::WHITE;
-        int ply_;
+        int16_t ply_;
         void update_slider_blockers(Color c) ;
+        [[nodiscard]] Key zobrist_key (bool from_scratch) const;
         public:
         explicit Position(
             const Board board,
@@ -39,6 +48,7 @@ namespace ChessCore {
             update_slider_blockers(Color::WHITE);
             update_slider_blockers(Color::BLACK);
             check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
+            current_state_.zobrist_key = zobrist_key(true);
         }
         [[nodiscard]] Position copy_for_search() const
         {
@@ -72,16 +82,25 @@ namespace ChessCore {
             constexpr auto mask = Side == Color::WHITE ? CastlingRight::WhiteQueenSide : CastlingRight::BlackQueenSide;
             return (state().castling_rights & mask) != CastlingRight::None;
         }
-        inline StateInfo& push_state(Move move, Piece captured);
+        inline const StateInfo& push_state(Move move, Piece captured);
         void handle_castling_rights(Move move);
         void undo_move();
         [[nodiscard]] bool legal(Move move) const;
         [[nodiscard]] std::set<Square> get_moves_squares(Square s) const;
-        [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return blockers_for_king_[color_idx(c)];};
+        [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return blockers_for_king_[color_idx(c)];}
+        [[nodiscard]] Move parse_move(const std::string & move_string) const;
+        [[nodiscard]] Move parse_move(Square from, Square to, PieceType promo) const;
         [[nodiscard]] BitBoard attackers_to(Square s , BitBoard occupancy) const;
-        [[nodiscard]] auto legal_moves() const {
-            return MoveGen::MoveList<MoveGen::GenType::LEGAL>(*this);
-        }
+        [[nodiscard]] Key polyglot_hash() const;
+        [[nodiscard]] auto legal_moves() const {return MoveGen::MoveList<MoveGen::GenType::LEGAL>(*this);}
+        [[nodiscard]] auto quiescence_moves() const {return MoveGen::MoveList<MoveGen::GenType::CAPTURES>(*this);} //moves are pseudo_legal
+        [[nodiscard]] auto evasion_moves() const {return MoveGen::MoveList<MoveGen::GenType::EVASIONS>(*this);}
+        template<MoveGen::GenType type>
+        [[nodiscard]] auto generate_moves() const {return MoveGen::MoveList<type>(*this);}
+        [[nodiscard]] bool in_check() const {return checkers();}
+        [[nodiscard]] bool zobrist_key() const {return zobrist_key(false);}
+        void verify_zobrist() const {assert(current_state_.zobrist_key == zobrist_key(true));}
+        [[nodiscard]] int ply() const {return ply_;}
 
 
     };

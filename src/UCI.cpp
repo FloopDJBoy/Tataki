@@ -1,0 +1,132 @@
+//
+// Created by FloopDJBoy on 07/08/2026.
+//
+
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "Uci.h"
+#include "ChessCore/FenHelper.h"
+#include "ChessCore/Move.h"
+#include "ChessCore/Position.h"
+#include "Engine/Engine.h"
+
+namespace UCI {
+    using std::string;
+    constexpr std::string_view ENGINE_NAME = "Sashimi";
+    constexpr std::string_view ENGINE_VERSION = "0.1.0";
+    namespace {
+        void parse_position(
+    ChessCore::Position& pos,
+    const std::string& command)
+        {
+            std::istringstream ss(command);
+            std::string token;
+
+            ss >> token; // "position"
+            ss >> token;
+
+            if (token == "startpos") {
+                pos = ChessCore::FenHelper::STARTING_POSITION;
+            }
+            else if (token == "kiwipete") {
+                pos = ChessCore::FenHelper::KIWIPETE;
+            }
+            else if (token == "fen") {
+                std::string fen;
+                std::string field;
+
+                for (int i = 0; i < 6 && ss >> field; ++i) {
+                    if (!fen.empty())
+                        fen += ' ';
+
+                    fen += field;
+                }
+
+                pos = ChessCore::FenHelper::fen_to_pos(fen);
+            }
+
+            if (ss >> token && token == "moves") {
+                while (ss >> token) {
+                    const ChessCore::Move move = pos.parse_move(token);
+
+                    if (move == ChessCore::Move::none())
+                        break;
+
+                    pos.make_move(move);
+                }
+            }
+        }
+        Engine::SearchLimits parse_go(const std::string& command) {
+            Engine::SearchLimits limits;
+            std::istringstream ss(command);
+            std::string token;
+            ss >> token; //the word "go"
+            while (ss >> token) {
+                if (token == "wtime") {
+                    ss >> limits.wtime_ms;
+                }
+                else if (token == "btime") {
+                    ss >> limits.btime_ms;
+                }
+                else if (token == "winc") {
+                    ss >> limits.winc_ms;
+                }
+                else if (token == "binc") {
+                    ss >> limits.binc_ms;
+                }
+                else if (token == "movestogo") {
+                    ss >> limits.moves_to_go;
+                }
+                else if (token == "depth") {
+                    ss >> limits.depth;
+                }
+                else if (token == "nodes") {
+                    ss >> limits.nodes;
+                }
+                else if (token == "movetime") {
+                    ss >> limits.movetime_ms;
+                }
+                else if (token == "mate") {
+                    ss >> limits.mate;
+                }
+                else if (token == "infinite") {
+                    limits.infinite = true;
+                }
+                else if (token == "ponder") {
+                    limits.ponder = true;
+                }
+            }
+            return limits;
+        }
+    }
+    void loop() {
+        string command;
+        ChessCore::Position pos = ChessCore::FenHelper::STARTING_POSITION;
+        Engine::Engine engine("assets/opening_books/Perfect2023.bin");
+        engine.set_position(pos);
+        while (std::getline(std::cin, command)) {
+            if (command == "uci") {
+                std::cout << "id name "<< ENGINE_NAME << " v"<< ENGINE_VERSION << std::endl;
+                std::cout << "id author FloopDJBoy" << std::endl;
+                std::cout << "uciok" << std::endl;
+            }
+            else if (command == "isready") {
+                std::cout << "readyok" << std::endl;
+            }else if (command.starts_with("go")) {
+                auto limits = parse_go(command);
+                engine.go(limits);
+                engine.wait_until_search_finished();
+                std::cout << "bestmove " << engine.best_move().to_string() << std::endl;
+            }
+            else if (command.starts_with("position")) {
+                parse_position(pos,command);
+                engine.set_position(pos);
+            }else if (command == "quit") {
+                break;
+            }
+        }
+    }
+}
+

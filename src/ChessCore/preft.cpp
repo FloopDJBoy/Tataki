@@ -16,7 +16,7 @@ namespace ChessCore::preft {
         std::vector<std::string> g_path;
     }
     namespace {
-        uint64_t run(Position& pos, int depth)
+        uint64_t run(Position& pos, const int depth)
         {
             if (depth == 0)
                 return 1;
@@ -26,16 +26,20 @@ namespace ChessCore::preft {
 
             for (const Move move : pos.legal_moves()) {
                 g_path.push_back(move.to_string());
+                const Key parent_key = pos.zobrist_key();
                 pos.make_move(move);
+                pos.verify_zobrist();
                 nodes += run(pos, depth - 1);
                 pos.undo_move();
+                assert(pos.zobrist_key() == parent_key);
+                pos.verify_zobrist();
                 g_path.pop_back();
             }
 
             return nodes;
         }
     }
-    uint64_t divide(const Position& original, int depth){
+    uint64_t divide(const Position& original, const int depth){
         Position pos = original.copy_for_search();
         uint64_t total = 0;
         for (const Move move : pos.legal_moves())
