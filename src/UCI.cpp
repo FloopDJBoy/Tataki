@@ -103,8 +103,8 @@ namespace UCI {
     }
     void loop() {
         string command;
-        ChessCore::Position pos = ChessCore::FenHelper::STARTING_POSITION;
         Engine::Engine engine("assets/opening_books/Perfect2023.bin");
+        ChessCore::Position pos = ChessCore::FenHelper::STARTING_POSITION;
         engine.set_position(pos);
         while (std::getline(std::cin, command)) {
             if (command == "uci") {

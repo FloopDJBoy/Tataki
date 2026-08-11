@@ -90,21 +90,25 @@ namespace ChessCore::Pieces {
     }
     constexpr int polyglot_index(const Piece p) {
         switch (p) {
-            case WHITE_PAWN:   return 0;
-            case WHITE_KNIGHT: return 1;
-            case WHITE_BISHOP: return 2;
-            case WHITE_ROOK:   return 3;
-            case WHITE_QUEEN:  return 4;
-            case WHITE_KING:   return 5;
+            case BLACK_PAWN:   return 0;
+            case WHITE_PAWN:   return 1;
 
-            case BLACK_PAWN:   return 6;
-            case BLACK_KNIGHT: return 7;
-            case BLACK_BISHOP: return 8;
-            case BLACK_ROOK:   return 9;
-            case BLACK_QUEEN:  return 10;
-            case BLACK_KING:   return 11;
+            case BLACK_KNIGHT: return 2;
+            case WHITE_KNIGHT: return 3;
 
-            default: return -1; // EMPTY or invalid piece
+            case BLACK_BISHOP: return 4;
+            case WHITE_BISHOP: return 5;
+
+            case BLACK_ROOK:   return 6;
+            case WHITE_ROOK:   return 7;
+
+            case BLACK_QUEEN:  return 8;
+            case WHITE_QUEEN:  return 9;
+
+            case BLACK_KING:   return 10;
+            case WHITE_KING:   return 11;
+
+            default: return -1;
         }
     }
     constexpr Piece from_polyglot_index(const int index) {

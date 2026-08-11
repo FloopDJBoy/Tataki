@@ -391,7 +391,7 @@ namespace ChessCore {
             key ^= OpeningBook::POLYGLOT_RANDOM[772 + BitBoards::file_of(ep_square())];
 
         // Side to move
-        if (side_to_move() == Color::BLACK)
+        if (side_to_move() == Color::WHITE)
             key ^= OpeningBook::POLYGLOT_RANDOM[780];
 
         return key;
@@ -433,7 +433,7 @@ namespace ChessCore {
             ];
 
         // Side to move
-        if (side_to_move() == Color::BLACK)
+        if (side_to_move() == Color::WHITE)
             key ^= Zobrist::tables.side_to_move;
 
         return key;
