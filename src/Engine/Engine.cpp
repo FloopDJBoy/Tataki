@@ -51,7 +51,7 @@ namespace Engine {
     }
 
     void Engine::finish_search() {
-        searching.store(false, std::memory_order_acquire);
+        searching.store(false, std::memory_order_relaxed);
         cv_.notify_one();
     }
 
