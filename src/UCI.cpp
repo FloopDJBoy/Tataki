@@ -15,7 +15,7 @@
 namespace UCI {
     using std::string;
     constexpr std::string_view ENGINE_NAME = "Sashimi";
-    constexpr std::string_view ENGINE_VERSION = "0.1.0";
+    constexpr std::string_view ENGINE_VERSION = "0.1.1";
     namespace {
         void parse_position(
     ChessCore::Position& pos,

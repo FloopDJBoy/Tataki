@@ -51,6 +51,18 @@ namespace Engine {
     }
     template <bool in_check>
     Score Search::quiesce(Score alpha, Score beta, SearchStack *ss) {
+        if ((++nodes & 1023) == 0) {
+            if (should_stop()) {
+                stop_search();
+            }
+        }
+        if (stop.load(std::memory_order_relaxed)) {
+            return 0;
+        }
+        // Draw by threefold repetition
+        if (pos.is_3fold()) {
+            return 0;
+        }
         if constexpr (!in_check) {
             // Stand-pat
             const Score stand_pat = Eval::evaluate(pos);
@@ -133,6 +145,10 @@ namespace Engine {
             }
         }
         if (stop.load(std::memory_order_relaxed)) {
+            return 0;
+        }
+        // Draw by threefold repetition
+        if (pos.is_3fold()) {
             return 0;
         }
         if (depth <= 0) {

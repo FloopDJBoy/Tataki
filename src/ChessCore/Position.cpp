@@ -119,6 +119,18 @@ namespace ChessCore {
         update_slider_blockers(side_to_move());
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
                    color_bb(~side_to_move());
+
+        repetition = 0;
+        if (current_state_.half_clock >= 4) {
+            for (int p = ply() - 2, i = 4;i <= current_state_.half_clock;p -= 2, i += 2) {
+                if (history[p].zobrist_key == key) {
+                    ++repetition;
+
+                    if (repetition >= 2)
+                        break;
+                }
+            }
+        }
     }
 
     void Position::undo_move() {

@@ -32,6 +32,7 @@ namespace ChessCore {
         std::array<StateInfo, MAX_PLY> history;
         Color side_to_move_ = Color::WHITE;
         int16_t ply_;
+        int repetition = 0; //3 fold repetition counter
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
         public:
@@ -99,6 +100,7 @@ namespace ChessCore {
         [[nodiscard]] auto generate_moves() const {return MoveGen::MoveList<type>(*this);}
         [[nodiscard]] bool in_check() const {return checkers();}
         [[nodiscard]] bool zobrist_key() const {return zobrist_key(false);}
+        [[nodiscard]] bool is_3fold() const {return repetition >= 2;}
         void verify_zobrist() const {assert(current_state_.zobrist_key == zobrist_key(true));}
         [[nodiscard]] int ply() const {return ply_;}
 
