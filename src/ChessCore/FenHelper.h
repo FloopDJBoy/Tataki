@@ -4,9 +4,9 @@
 #include <string_view>
 #include "BitBoards.h"
 #include <vector>
-
 #include "Position.h"
 #include "Types.h"
+
 namespace ChessCore::FenHelper {
     using std::string_view;
     using namespace std::string_view_literals;
@@ -88,13 +88,27 @@ namespace ChessCore::FenHelper {
 
         return rank * 8 + file;
     }
-    constexpr Position fen_to_pos(const string_view fen) {
+    constexpr int32_t get_half_clock(const string_view fen) {
+        const auto sv = get_x_split(4,fen);
+        if (sv == "-")
+            return 0;
+        return sv[0] - '0';
+    }
+    constexpr int32_t get_full_move_clock(const string_view fen) {
+        const auto sv = get_x_split(5,fen);
+        if (sv == "-")
+            return 1;
+        return sv[0] - '0';
+    }
+    inline Position fen_to_pos(const string_view fen) {
         const auto board = get_board(fen);
         const auto side = get_side_to_move(fen);
         const auto rights = get_castling_rights(fen);
         const auto en_square = get_en_square(fen);
-        const auto pos = Position(board,rights,en_square,side,0);
-        return Position(pos);
+        const auto half_clock = get_half_clock(fen);
+        const auto full_move_clock = get_full_move_clock(fen);
+        const auto pos = Position(board,rights,en_square,side,half_clock,full_move_clock);
+        return pos;
     }
     inline const Position STARTING_POSITION = fen_to_pos(STARTING_POSITION_FEN);
     inline const Position KIWIPETE = fen_to_pos(KIWIPETE_FEN);

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "UCI.h"
+#include "ChessCore/preft.h"
 #include "ChessCore/FenHelper.h"
 #include "ChessCore/Move.h"
 #include "ChessCore/Position.h"
@@ -14,8 +15,6 @@
 
 namespace UCI {
     using std::string;
-    constexpr std::string_view ENGINE_NAME = "Sashimi";
-    constexpr std::string_view ENGINE_VERSION = "0.1.1";
     namespace {
         void parse_position(
     ChessCore::Position& pos,
@@ -104,27 +103,46 @@ namespace UCI {
     void loop() {
         string command;
         Engine::Engine engine("assets/opening_books/Perfect2023.bin");
-        ChessCore::Position pos = ChessCore::FenHelper::STARTING_POSITION;
+        ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
+        std::cerr << pos.fen() << std::endl;
+        assert(pos.fen() == ChessCore::FenHelper::STARTING_POSITION_FEN);
         engine.set_position(pos);
+        engine.on_search_finished([](ChessCore::Move move) {
+                   std::cout << "bestmove "
+                             << move.to_string()
+                             << std::endl;
+               });
         while (std::getline(std::cin, command)) {
             if (command == "uci") {
-                std::cout << "id name "<< ENGINE_NAME << " v"<< ENGINE_VERSION << std::endl;
+                std::cout << "id name "<< ENGINE_NAME << " " << ENGINE_VERSION << std::endl;
                 std::cout << "id author FloopDJBoy" << std::endl;
                 std::cout << "uciok" << std::endl;
             }
             else if (command == "isready") {
                 std::cout << "readyok" << std::endl;
             }else if (command.starts_with("go")) {
+                std::string token;
+                std::istringstream ss(command);
+                ss >> token; //"go"
+                ss >> token;
+                if (token == "preft") {
+                    int depth;
+                    ss >> depth;
+                    ChessCore::preft::test(pos, depth);
+                    continue;
+                }
                 auto limits = parse_go(command);
                 engine.go(limits);
-                engine.wait_until_search_finished();
-                std::cout << "bestmove " << engine.best_move().to_string() << std::endl;
             }
             else if (command.starts_with("position")) {
                 parse_position(pos,command);
                 engine.set_position(pos);
             }else if (command == "quit") {
                 break;
+            }else if (command == "stop") {
+                engine.stop();
+            }else if (command == "getfen") {
+                std::cerr << "fen " << pos.fen() << std::endl;
             }
         }
     }

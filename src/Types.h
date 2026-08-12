@@ -116,7 +116,16 @@ enum class Bound : uint8_t{
     UPPER
 };
 
-
+struct ScorePair {
+    int16_t mg{0};
+    int16_t eg{0};
+    constexpr ScorePair() = default;
+    constexpr ScorePair(const int16_t mg, const int16_t eg) : mg(mg), eg(eg) {}
+    constexpr ScorePair operator+(ScorePair o) const { return {static_cast<int16_t>(mg + o.mg), static_cast<int16_t>(eg + o.eg)}; }
+    constexpr ScorePair operator-(ScorePair o) const { return {static_cast<int16_t>(mg - o.mg), static_cast<int16_t>(eg - o.eg)}; }
+    ScorePair& operator+=(const ScorePair o) { mg += o.mg; eg += o.eg; return *this; }
+    ScorePair& operator-=(const ScorePair o) { mg -= o.mg; eg -= o.eg; return *this; }
+};
 constexpr bool is_valid_square(const Square s) {
     return s<64;
 }
@@ -129,3 +138,4 @@ constexpr Square cord_to_square(const int x, const int y) {
 constexpr std::pair<int,int> square_to_cord(const Square square) {
     return  {square%8,square/8};
 }
+

@@ -4,6 +4,7 @@
 
 #include "Position.h"
 
+#include "FenHelper.h"
 #include "magic_enum.hpp"
 #include "Types.h"
 #include "MoveGen.h"
@@ -15,8 +16,99 @@ namespace ChessCore {
     using enum PieceType;
     using Pieces::makePiece;
     using namespace Engine;
+    Position::Position(const std::string_view fen) : Position(FenHelper::fen_to_pos(fen)) {
+
+    }
+    std::string_view Position::fen() const {
+        static thread_local std::string result;
+        result.clear();
+
+        // Board
+        for (int rank = 7; rank >= 0; --rank) {
+            int empty = 0;
+
+            for (int file = 0; file < 8; ++file) {
+                const auto s = static_cast<Square>(rank * 8 + file);
+                const Piece p = square(s);
+
+                if (p == Pieces::EMPTY) {
+                    ++empty;
+                    continue;
+                }
+
+                if (empty) {
+                    result += static_cast<char>('0' + empty);
+                    empty = 0;
+                }
+
+                result += Pieces::piece_to_symbol(p);
+            }
+
+            if (empty)
+                result += static_cast<char>('0' + empty);
+
+            if (rank != 0)
+                result += '/';
+        }
+
+        // Side to move
+        result += ' ';
+        result += side_to_move() == Color::WHITE ? 'w' : 'b';
+
+        // Castling rights
+        result += ' ';
+
+        bool has_castling = false;
+
+        if (can_castle_kingside<Color::WHITE>()) {
+            result += 'K';
+            has_castling = true;
+        }
+
+        if (can_castle_queenside<Color::WHITE>()) {
+            result += 'Q';
+            has_castling = true;
+        }
+
+        if (can_castle_kingside<Color::BLACK>()) {
+            result += 'k';
+            has_castling = true;
+        }
+
+        if (can_castle_queenside<Color::BLACK>()) {
+            result += 'q';
+            has_castling = true;
+        }
+
+        if (!has_castling)
+            result += '-';
+
+        // En passant
+        result += ' ';
+
+        if (ep_square() == NO_SQUARE) {
+            result += '-';
+        } else {
+            const int file = BitBoards::file_of(ep_square());
+            const int rank = BitBoards::rank_of(ep_square());
+
+            result += static_cast<char>('a' + file);
+            result += static_cast<char>('1' + rank);
+        }
+
+        // Halfmove clock
+        result += ' ';
+        result += std::to_string(current_state_.half_clock);
+
+        // Fullmove number
+        result += ' ';
+        result+=  std::to_string(fullmove_number_);
+
+        return result;
+    }
     //move is assume legal
-    Position::Position(const Board board,const CastlingRight cr,const Square ep,const Color side,const int half_clock) : board(board),side_to_move_(side),ply_(0) {
+    Position::Position(const Board board,const CastlingRight cr,const Square ep,const Color side,const int half_clock,const int full_move)
+    : board(board),side_to_move_(side),ply_(0), fullmove_number_(full_move) {
         current_state_.castling_rights = cr;
         current_state_.ep_square = ep;
         current_state_.half_clock = half_clock;
@@ -25,18 +117,14 @@ namespace ChessCore {
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
         current_state_.zobrist_key = zobrist_key(true);
 
-        for (Color c : {Color::WHITE, Color::BLACK}) {
+        for (const Color c : {Color::WHITE, Color::BLACK}) {
             BitBoard bb = color_bb(c);
             while (bb) {
                 const Square s = BitBoards::pop_lsb(bb);
                 const Piece p = square(s);
                 const auto ci = color_idx(c);
 
-                current_state_.material_score[ci] +=
-                    Eval::material_value(Pieces::getType(p));
-
-                current_state_.pst_score[ci] +=
-                    Eval::pst_value(p, s);
+                current_state_.material_score[ci] +=Eval::evaluate_piece(p,s);
             }
         }
     }
@@ -82,8 +170,8 @@ namespace ChessCore {
 
                 board.remove_piece(to);
                 board.set_piece(to,promo);
-                current_state_.material_score[color_idx(us)] += -Eval::material_value(PAWN) + Eval::material_value(move.promotion_type());
-                current_state_.pst_score[color_idx(us)] += -Eval::pst_value(moving,from) + Eval::pst_value(promo,to);
+                current_state_.material_score[color_idx(us)] +=  Eval::evaluate_piece(promo,to) - Eval::evaluate_piece(moving,from);
+                current_state_.phase += Eval::phase_value(move.promotion_type());
                 break;
             }
             case MoveType::CASTLING: {
@@ -104,9 +192,7 @@ namespace ChessCore {
                 board.remove_piece(rook_start);
                 board.set_piece(rook_end, Pieces::makePiece(PieceType::ROOK, us));
                 const Piece rook = Pieces::makePiece(PieceType::ROOK, us);
-                current_state_.pst_score[color_idx(us)] +=
-                    Eval::pst_value(rook, rook_end) -
-                    Eval::pst_value(rook, rook_start);
+                current_state_.material_score[color_idx(us)] +=Eval::evaluate_piece(rook, rook_end) -Eval::evaluate_piece(rook, rook_start);
                 key ^= Engine::Zobrist::piece_key(rook, rook_start);
                 key ^= Engine::Zobrist::piece_key(rook, rook_end);
                 break;
@@ -130,13 +216,16 @@ namespace ChessCore {
         current_state_.half_clock = half_clock_move ? 0 : current_state_.half_clock + 1;
         if (captured != Pieces::EMPTY) {
             key ^= Zobrist::piece_key(captured, captured_square);
-            current_state_.material_score[color_idx(them)] -= Eval::material_value(Pieces::getType(captured));
-            current_state_.pst_score[color_idx(them)] -= Eval::pst_value(captured,captured_square);
+            current_state_.material_score[color_idx(them)] -= Eval::evaluate_piece(captured, captured_square);
+            current_state_.phase -= Eval::phase_value(Pieces::getType(captured));
         }
         if (type != MoveType::PROMOTION) {
-            current_state_.pst_score[color_idx(us)] += Eval::pst_value(moving,to) - Eval::pst_value(moving,from);
+            current_state_.material_score[color_idx(us)] += Eval::evaluate_piece(moving,to) - Eval::evaluate_piece(moving,from);
             key ^= Zobrist::piece_key(moving, from);
             key ^= Zobrist::piece_key(moving, to);
+        }
+        if (us == Color::BLACK) {
+            ++fullmove_number_;
         }
         swap_side();
         key ^= Engine::Zobrist::tables.side_to_move;
@@ -372,8 +461,25 @@ namespace ChessCore {
 
         // Castling
         if (Pieces::getType(square(from)) == KING) {
-            if (abs(to - from) == 2)
+            if (abs(to - from) == 2) {
                 return Move::make<MoveType::CASTLING>(from, to);
+            }
+
+            if (from == e1 && to == a1) {
+                return Move::make<MoveType::CASTLING>(from, c1);
+            }
+
+            if (from == e1 && to == h1) {
+                return Move::make<MoveType::CASTLING>(from, g1);
+            }
+
+            if (from == e8 && to == a8) {
+                return Move::make<MoveType::CASTLING>(from, c8);
+            }
+
+            if (from == e8 && to == h8) {
+                return Move::make<MoveType::CASTLING>(from, g8);
+            }
         }
 
         // En passant
@@ -411,8 +517,26 @@ namespace ChessCore {
             key ^= OpeningBook::POLYGLOT_RANDOM[771];
 
         // En passant
-        if (ep_square() != NO_SQUARE)
-            key ^= OpeningBook::POLYGLOT_RANDOM[772 + BitBoards::file_of(ep_square())];
+        // En passant
+        if (ep_square() != NO_SQUARE) {
+            const Square ep = ep_square();
+
+            if (side_to_move() == Color::WHITE) {
+                const auto pawns =
+                    BitBoards::get_single_pawn_attacks<Color::BLACK>(ep)
+                    & piece_bb(Pieces::WHITE_PAWN);
+
+                if (pawns)
+                    key ^= OpeningBook::POLYGLOT_RANDOM[772 + BitBoards::file_of(ep)];
+            } else {
+                const auto pawns =
+                    BitBoards::get_single_pawn_attacks<Color::WHITE>(ep)
+                    & piece_bb(Pieces::BLACK_PAWN);
+
+                if (pawns)
+                    key ^= OpeningBook::POLYGLOT_RANDOM[772 + BitBoards::file_of(ep)];
+            }
+        }
 
         // Side to move
         if (side_to_move() == Color::WHITE)
@@ -437,6 +561,7 @@ namespace ChessCore {
             }
         }
 
+
         // Castling rights
         if (can_castle_kingside<Color::WHITE>())
             key ^= Zobrist::tables.castling[0];
@@ -451,10 +576,9 @@ namespace ChessCore {
             key ^= Zobrist::tables.castling[3];
 
         // En passant
-        if (ep_square() != NO_SQUARE)
-            key ^= Zobrist::tables.en_passant[
-                BitBoards::file_of(ep_square())
-            ];
+        if (ep_square() != NO_SQUARE) {
+            key ^= Zobrist::tables.en_passant[BitBoards::file_of(ep_square())];
+        }
 
         // Side to move
         if (side_to_move() == Color::WHITE)

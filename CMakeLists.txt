@@ -20,6 +20,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #src/Gui/Board.cpp
 #src/Gui/Board.h
 #resources.qrc
+set(ENGINE_NAME "Sashimi")
+set(ENGINE_VERSION "v0.3.0")
+
 add_executable(chessEngine
         src/main.cpp
         src/Types.h
@@ -51,11 +54,17 @@ add_executable(chessEngine
         src/Engine/Zobrist.h
         src/main.cpp
 )
+target_compile_definitions(chessEngine PRIVATE
+        ENGINE_NAME="${ENGINE_NAME}"
+        ENGINE_VERSION="${ENGINE_VERSION}"
+)
 target_include_directories( chessEngine PRIVATE
         ${PROJECT_SOURCE_DIR}/external
         ${PROJECT_SOURCE_DIR}/src
 )
-
+set_target_properties(chessEngine PROPERTIES
+        OUTPUT_NAME ${ENGINE_NAME}_${ENGINE_VERSION}
+)
 #target_link_libraries(chessEngine
 #        Qt6::Core
 #        Qt6::Gui

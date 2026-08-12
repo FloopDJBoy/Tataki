@@ -6,6 +6,7 @@
 #define CHESSENGINE_TRANSPOSITIONTABLE_H
 #include <memory>
 
+#include "Eval.h"
 #include "ChessCore/Move.h"
 
 namespace Engine {
@@ -22,6 +23,7 @@ namespace Engine {
         constexpr static size_t NUM_BUCKETS = 1ull << 24; //1GB or 16,777,216 buckets
         constexpr static int BUCKET_SIZE = 4;
         static_assert(sizeof(TTEntry)*BUCKET_SIZE == 64);
+        constexpr static Score MATE_THRESHOLD = Eval::MATE_SCORE -1000;
 
         constexpr static int AGE_PENALTY = 4;
         constexpr static int EXACT_BONUS = 2;
@@ -39,6 +41,25 @@ namespace Engine {
         void insert(Key key,Score score,int16_t depth ,ChessCore::Move best_move,Bound bound);
         void new_search() {
             ++generation;
+        }
+        static Score value_to_tt(const Score score, const int ply) {
+            if (score > MATE_THRESHOLD)
+                return score + ply;
+
+            if (score < -MATE_THRESHOLD)
+                return score - ply;
+
+            return score;
+        }
+
+        static Score value_from_tt(const Score score, const int ply) {
+            if (score > MATE_THRESHOLD)
+                return score - ply;
+
+            if (score < -MATE_THRESHOLD)
+                return score + ply;
+
+            return score;
         }
         void clear();
     };

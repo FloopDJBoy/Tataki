@@ -25,23 +25,21 @@ namespace ChessCore::preft {
 
 
             for (const Move move : pos.legal_moves()) {
-                g_path.push_back(move.to_string());
-                const Key parent_key = pos.zobrist_key();
+                //g_path.push_back(move.to_string());
                 pos.make_move(move);
-                pos.verify_zobrist();
                 nodes += run(pos, depth - 1);
                 pos.undo_move();
-                assert(pos.zobrist_key() == parent_key);
-                pos.verify_zobrist();
-                g_path.pop_back();
+                //g_path.pop_back();
             }
 
             return nodes;
         }
     }
-    uint64_t divide(const Position& original, const int depth){
+    uint64_t divide(const Position& original, const int depth)
+    {
         Position pos = original.copy_for_search();
         uint64_t total = 0;
+
         for (const Move move : pos.legal_moves())
         {
             pos.make_move(move);
@@ -50,12 +48,15 @@ namespace ChessCore::preft {
 
             pos.undo_move();
 
-            std::cout << move.to_string() << ": " << nodes << std::endl;
+            std::cout << move.to_string()
+                      << ": "
+                      << nodes
+                      << '\n';
 
             total += nodes;
         }
 
-        std::cout << "Total: " << total << std::endl;
+        std::cout << "Nodes searched: " << total << '\n';
 
         return total;
     }
@@ -63,6 +64,8 @@ namespace ChessCore::preft {
     {
         using clock = std::chrono::steady_clock;
         Position pos = original.copy_for_search();
+        g_path.reserve(50);
+
         for (int depth = 1; depth <= max_depth; ++depth)
         {
             const auto start = clock::now();
@@ -70,18 +73,22 @@ namespace ChessCore::preft {
             const uint64_t nodes = run(pos, depth);
 
             const auto end = clock::now();
-            const double seconds =
-                std::chrono::duration<double>(end - start).count();
+
+            const auto milliseconds =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    end - start
+                ).count();
 
             const uint64_t nps =
-                seconds > 0.0 ? static_cast<uint64_t>(nodes / seconds) : 0;
+                milliseconds > 0
+                    ? nodes * 1000ULL / static_cast<uint64_t>(milliseconds)
+                    : 0;
 
             std::cout
-                << "Depth " << depth
-                << ": " << nodes << " nodes"
-                << " | Time: " << std::fixed << std::setprecision(3)
-                << seconds << " s"
-                << " | NPS: " << nps
+                << "info depth " << depth
+                << " nodes " << nodes
+                << " time " << milliseconds
+                << " nps " << nps
                 << '\n';
         }
     }

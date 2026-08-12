@@ -20,8 +20,9 @@ namespace ChessCore {
         int half_clock;
 
         //scoring
-        std::array<Value,2> pst_score;
-        std::array<Value,2> material_score;
+        std::array<ScorePair,2> material_score;
+
+        uint8_t phase;
     };
     class Position {
         static constexpr int16_t MAX_PLY = 512;
@@ -32,6 +33,7 @@ namespace ChessCore {
         std::array<StateInfo, MAX_PLY> history;
         Color side_to_move_ = Color::WHITE;
         int16_t ply_;
+        int32_t fullmove_number_;
         int repetition = 0; //3 fold repetition counter
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
@@ -41,7 +43,8 @@ namespace ChessCore {
             CastlingRight cr,
             Square ep,
             Color side,
-            int half_clock);
+            int half_clock,
+            int full_move);
         [[nodiscard]] Position copy_for_search() const
         {
             Position p(*this);
@@ -49,6 +52,8 @@ namespace ChessCore {
             p.ply_ = 0;
             return p;
         }
+        explicit Position(std::string_view fen);
+        [[nodiscard]] std::string_view fen() const;
         void make_move(Move move);
         [[nodiscard]] constexpr Piece square(const Square s) const { return board.get_piece(s); }
         [[nodiscard]] Color side_to_move() const {return side_to_move_;}

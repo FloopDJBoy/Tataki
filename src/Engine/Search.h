@@ -12,6 +12,10 @@
 #include "TranspositionTable.h"
 
 namespace Engine {
+    struct SearchResult {
+        ChessCore::Move move;
+        Score score;
+    };
     struct PV {
         static constexpr uint32_t MAX_PLY = 256;
 
@@ -70,17 +74,17 @@ namespace Engine {
         constexpr static int search_time_margin=100;
         std::atomic_bool stop{false};
         SearchStack stack[PV::MAX_PLY + 10];
-        TranspositionTable tt;
+        TranspositionTable& tt;
         Score alpha_beta(Score alpha, Score beta,int depth,SearchStack* ss);
         [[nodiscard]] bool should_stop() const;
         template <bool in_check>
         [[nodiscard]] Score quiesce(Score alpha, Score beta,SearchStack* ss);
-        [[nodiscard]]ChessCore::Move search(int depth,SearchStack* ss);
+        [[nodiscard]]SearchResult search(int depth,SearchStack* ss);
         [[nodiscard]] std::chrono::milliseconds calculate_time_limit() const;
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
         public:
         void stop_search() {stop.store(true,std::memory_order_relaxed);}
-        Search(const ChessCore::Position &p,const SearchLimits& search_limits) :pos(p.copy_for_search()),limits(search_limits) {};
+        Search(const ChessCore::Position &p,const SearchLimits& search_limits,TranspositionTable& t) :pos(p.copy_for_search()),limits(search_limits),tt(t) {};
 
         ChessCore::Move find_best_move();
 

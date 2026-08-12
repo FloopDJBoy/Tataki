@@ -83,6 +83,9 @@ namespace ChessCore::BitBoards {
     constexpr int file_of(const Square s) {
         return s%8;
     }
+    constexpr int rank_of(const Square s) {
+        return s/8;
+    }
 
 
     constexpr std::array<std::pair<int, int>, 8> knight_jumps = {{
@@ -420,7 +423,5 @@ namespace ChessCore::BitBoards {
     }
     static_assert(cord_to_square(0,0) == a1); // A1
     static_assert(cord_to_square(7,7) == h8); // H8
-    
-
 
 }

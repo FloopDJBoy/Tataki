@@ -5,6 +5,7 @@
 #ifndef CHESSENGINE_ENGINE_H
 #define CHESSENGINE_ENGINE_H
 #include <condition_variable>
+#include <functional>
 #include <thread>
 
 #include "OpeningBook.h"
@@ -15,13 +16,15 @@ namespace Engine {
     class Engine {
         OpeningBook book;
         ChessCore::Position position;
-
+        constexpr static bool enable_book = true;
+        TranspositionTable tt;
         std::unique_ptr<Search> searcher;
         std::jthread search_thread;
 
         ChessCore::Move best_move_;
         std::atomic_bool searching = false;
         mutable std::mutex mutex;
+        std::function<void(ChessCore::Move)> on_search_finished_;
         mutable std::condition_variable cv_;
 
         void finish_search();
@@ -38,7 +41,7 @@ namespace Engine {
         ~Engine();
 
         void set_position(const ChessCore::Position& pos);
-
+        void on_search_finished(const std::function<void(ChessCore::Move)> &callback) {on_search_finished_ = callback;};
         void go(const SearchLimits& limits);
         void stop();
         void wait_until_search_finished() const;
