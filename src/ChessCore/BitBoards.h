@@ -25,6 +25,10 @@ namespace ChessCore::BitBoards {
     constexpr BitBoard RANK_7 = RANK_6<<8;
     constexpr BitBoard RANK_8 = RANK_7<<8;
 
+    constexpr BitBoard LIGHT_SQUARES = 0xAA55AA55AA55AA55ULL;
+    constexpr BitBoard DARK_SQUARES = ~LIGHT_SQUARES;
+
+
     constexpr std::array<BitBoard, 2> queen_side_castle_mask = {
         (1ULL << b1) | (1ULL << c1) | (1ULL << d1), // white queenside
         (1ULL << b8) | (1ULL << c8) | (1ULL << d8)  // black queenside

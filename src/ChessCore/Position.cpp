@@ -437,6 +437,38 @@ namespace ChessCore {
             |
             (BitBoards::get_attacks_bb<PieceType::KING>(s) & piece_bb(PieceType::KING));
     }
+    bool Position::is_insufficient_material() const {
+        BitBoard major_and_pawns = piece_bb(PieceType::PAWN) | piece_bb(PieceType::ROOK) | piece_bb(PieceType::QUEEN);
+
+        if (major_and_pawns != 0) {
+            return false; // Material is sufficient to mate
+        }
+        int knight_count = std::popcount(piece_bb(PieceType::KNIGHT));
+        int bishop_count = std::popcount(piece_bb(PieceType::BISHOP));
+        int total_minors = knight_count + bishop_count;
+
+        if (total_minors == 0) return true;
+
+        // K+N vs K or K+B vs K
+        if (total_minors == 1) return true;
+
+        // K+B vs K+B (Check if they are on the same color squares)
+        if (knight_count == 0 && bishop_count == 2) {
+            BitBoard bishops = piece_bb(PieceType::BISHOP);
+
+            // LIGHT_SQUARES is a precomputed constant bitboard (0x55AA55AA55AA55AA)
+            bool both_on_light = (bishops & BitBoards::LIGHT_SQUARES) == bishops;
+            bool both_on_dark  = (bishops & BitBoards::DARK_SQUARES) == bishops;
+
+            if (both_on_light || both_on_dark) {
+                return true; // Draw by same-color bishops
+            }
+        }
+        // Cases like KNN vs K, or KB vs KN, or opposite color bishops.
+        // FIDE rules technically allow a mate (helpmate) in these scenarios.
+        //good for play vs humans
+        return false;
+    }
     Move Position::parse_move(const std::string& move_string) const {
         auto from_name = magic_enum::enum_cast<SquareName>(move_string.substr(0,2));
         auto to_name   = magic_enum::enum_cast<SquareName>(move_string.substr(2,2));
@@ -490,6 +522,7 @@ namespace ChessCore {
 
         return Move(from, to);
     }
+
     Key Position::polyglot_hash() const {
         Key key = 0;
 
@@ -586,4 +619,5 @@ namespace ChessCore {
 
         return key;
     }
+
 } // ChessCore

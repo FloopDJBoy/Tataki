@@ -97,6 +97,8 @@ namespace ChessCore {
         [[nodiscard]] bool in_check() const {return checkers();}
         [[nodiscard]] Key zobrist_key() const {return zobrist_key(false);}
         [[nodiscard]] bool is_3fold() const {return repetition >= 2;}
+        [[nodiscard]] bool is_insufficient_material() const;
+        [[nodiscard]] bool is_draw() const {return is_3fold() || is_insufficient_material();}
         void verify_zobrist() const {assert(current_state_.zobrist_key == zobrist_key(true));}
         [[nodiscard]] int ply() const {return ply_;}
 

@@ -65,7 +65,7 @@ namespace Engine {
         if (pos.ply() >= PV::MAX_PLY - 1)
             return Eval::evaluate(pos);
 
-        if (pos.is_3fold()) {
+        if (pos.is_draw()) {
             return 0;
         }
         Score best_score;
@@ -161,7 +161,7 @@ namespace Engine {
         if (pos.ply() >= PV::MAX_PLY - 1)
             return Eval::evaluate(pos);
 
-        if (pos.is_3fold()) {
+        if (pos.is_draw()) {
             return 0;
         }
 
