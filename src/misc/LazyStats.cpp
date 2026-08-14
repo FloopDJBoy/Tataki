@@ -46,7 +46,7 @@ namespace Engine::LazyTuning {
         const int lazy_eval = (pos.side_to_move() == Color::WHITE) ? lazy_diff : -lazy_diff;
 
         // 2. Force Full Evaluation (Pass wide window to bypass lazy cutoff)
-        const int full_eval = Eval::evaluate(pos, Eval::NEG_INF, Eval::INF);
+        const int full_eval = Eval::evaluate(pos);
 
         // 3. Compute error delta
         int delta = std::abs(full_eval - lazy_eval);

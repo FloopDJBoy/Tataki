@@ -20,17 +20,6 @@ namespace Engine {
         }
         return quality;
     }
-
-    inline TTEntry* TranspositionTable::operator[](const Key key) {
-        TTEntry* bucket = &tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE];
-
-        for (int i = 0; i < BUCKET_SIZE; ++i) {
-            if (bucket[i].key == key)
-                return &bucket[i];
-        }
-
-        return nullptr;
-    }
     void TranspositionTable::insert(const Key key, const Score score, const int16_t depth,
                                     const ChessCore::Move best_move, const Bound bound) {
         TTEntry* bucket = &tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE];
@@ -70,13 +59,5 @@ namespace Engine {
         if (replace_candidate) {
             *replace_candidate = TTEntry{.key = key, .score = score, .depth = depth, .best_move = best_move, .bound = bound, .age = generation};
         }
-    }
-    inline void TranspositionTable::clear() {
-        generation = 0;
-        std::memset(
-            tt.get(),
-            0,
-            NUM_BUCKETS * BUCKET_SIZE * sizeof(TTEntry)
-        );
     }
 } // Engine

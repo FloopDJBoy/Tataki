@@ -14,7 +14,7 @@ namespace Engine {
         stop();
     }
     inline static void print_time() {
-        std::cerr<<std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count()<< " ms\n" << std::endl;
+        ////std::cerr<<std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count()<< " ms\n" << std::endl;
     }
     void Engine::go(const SearchLimits& limits)
     {
@@ -34,20 +34,20 @@ namespace Engine {
 
 
         search_thread = std::jthread([this] {
-            std::cerr << "A: search thread started\n";
-            print_time();
+            ////std::cerr << "A: search thread started\n";
+            ////print_time();
             const auto move = searcher->find_best_move();
-            std::cerr << "B: find_best_move returned\n";
-            print_time();
+            ////std::cerr << "B: find_best_move returned\n";
+            ////print_time();
             {
                 std::lock_guard lock(mutex);
                 best_move_ = move;
             }
-            std::cerr << "C: best_move stored\n";
-            print_time();
+            //std::cerr << "C: best_move stored\n";
+            //print_time();
             finish_search();
-            std::cerr << "D: finish_search returned\n";
-            print_time();
+            //std::cerr << "D: finish_search returned\n";
+            //print_time();
         });
     }
 
@@ -69,22 +69,22 @@ namespace Engine {
     }
 
     void Engine::finish_search() {
-        std::cerr << "E: finish_search entered\n";
-        print_time();
+        //std::cerr << "E: finish_search entered\n";
+        //print_time();
         searching.store(false, std::memory_order_relaxed);
         const auto move = best_move();
-        std::cerr << "F: best_move obtained\n";
-        print_time();
+        //std::cerr << "F: best_move obtained\n";
+        //print_time();
         if (on_search_finished_) {
-            std::cerr << "G: callback\n";
-            print_time();
+            //std::cerr << "G: callback\n";
+            //print_time();
             on_search_finished_(move);
         }
-        std::cerr << "H: callback returned\n";
-        print_time();
+        //std::cerr << "H: callback returned\n";
+        //print_time();
         cv_.notify_all();
-        std::cerr << "I: finish_search done\n";
-        print_time();
+        //std::cerr << "I: finish_search done\n";
+        //print_time();
     }
 
     ChessCore::Move Engine::best_move() const

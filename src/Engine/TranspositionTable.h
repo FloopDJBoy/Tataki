@@ -37,7 +37,16 @@ namespace Engine {
         public:
         [[nodiscard]] int replacement_score(const TTEntry& e) const;
         TranspositionTable();
-        TTEntry* operator [](Key key);
+        TTEntry* operator [](Key key) {
+            TTEntry* bucket = &tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE];
+
+            for (int i = 0; i < BUCKET_SIZE; ++i) {
+                if (bucket[i].key == key)
+                    return &bucket[i];
+            }
+
+            return nullptr;
+        }
         void insert(Key key,Score score,int16_t depth ,ChessCore::Move best_move,Bound bound);
         void new_search() {
             ++generation;
@@ -61,7 +70,14 @@ namespace Engine {
 
             return score;
         }
-        void clear();
+        void clear(){
+            generation = 0;
+            std::memset(
+                tt.get(),
+                0,
+                NUM_BUCKETS * BUCKET_SIZE * sizeof(TTEntry)
+            );
+        }
     };
 } // Engine
 

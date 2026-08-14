@@ -33,6 +33,7 @@ namespace ChessCore {
         std::array<StateInfo, MAX_PLY> history;
         Color side_to_move_ = Color::WHITE;
         int16_t ply_;
+        int16_t root_ply_ = 0; // ply_ value when this copy was handed to Search
         int32_t fullmove_number_;
         int repetition = 0; //3 fold repetition counter
         void update_slider_blockers(Color c) ;
@@ -48,8 +49,7 @@ namespace ChessCore {
         [[nodiscard]] Position copy_for_search() const
         {
             Position p(*this);
-            p.history.fill({});
-            p.ply_ = 0;
+            p.root_ply_ = p.ply_;
             return p;
         }
         explicit Position(std::string_view fen);
@@ -105,7 +105,8 @@ namespace ChessCore {
             assert(current_state_.zobrist_key == zobrist_key(true));
         }
 #endif
-        [[nodiscard]] int ply() const {return ply_;}
+        [[nodiscard]] int ply() const {return ply_ - root_ply_;}
+        [[nodiscard]] int abs_ply () const {return ply_;}
 
 
     };

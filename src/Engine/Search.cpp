@@ -5,7 +5,7 @@
 #include "Search.h"
 
 #include <iostream>
-
+#include "Engine/TranspositionTable.h"
 #include "Eval.h"
 namespace Engine {
     using namespace ChessCore;
@@ -169,10 +169,8 @@ namespace Engine {
             return pos.in_check() ? quiesce<true>(alpha, beta, ss) : quiesce<false>(alpha, beta, ss);
         }
 
-
-
         const Key zobrist_key = pos.zobrist_key();
-        const auto tt_entry = tt[zobrist_key];
+        const Engine::TTEntry* tt_entry = tt[zobrist_key];
         Move tt_move = Move::none();
         const Score original_alpha = alpha;
 
@@ -316,12 +314,6 @@ namespace Engine {
         }
         const auto now = Clock::now();
         if (search_deadline != std::chrono::time_point<Clock>::max() && Clock::now() >= search_deadline) {
-            std::cerr << "STOP: "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                     now - start_time
-                 ).count()
-              << " ms\n";
-
             return true;
         }
         return false;
@@ -414,11 +406,6 @@ namespace Engine {
             const auto nps = nodes * 1000 / time_ms;
 
             if (stop.load(std::memory_order_relaxed)) {
-                std::cerr << "return STOP: "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                     Clock::now() - start_time
-                 ).count()
-              << " ms\n";
                 return best_move;
             }
 

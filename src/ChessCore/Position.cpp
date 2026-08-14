@@ -252,10 +252,9 @@ namespace ChessCore {
 
         repetition = 0;
         if (current_state_.half_clock >= 4) {
-            for (int p = ply() - 2, i = 4;i <= current_state_.half_clock;p -= 2, i += 2) {
+            for (int p = ply_ - 2, i = 4; i <= current_state_.half_clock && p >= 0; p -= 2, i += 2) {
                 if (history[p].zobrist_key == zobrist_key) {
                     ++repetition;
-
                     if (repetition >= 2)
                         break;
                 }
