@@ -21,7 +21,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #src/Gui/Board.h
 #resources.qrc
 set(ENGINE_NAME "Sashimi")
-set(ENGINE_VERSION "v0.3.1")
+set(ENGINE_VERSION "v0.4.0")
 
 add_executable(chessEngine
         src/main.cpp
@@ -36,8 +36,8 @@ add_executable(chessEngine
         src/ChessCore/PrecomputedMagics.h
         src/ChessCore/MoveGen.cpp
         src/ChessCore/MoveGen.h
-        src/ChessCore/preft.cpp
-        src/ChessCore/preft.h
+        src/misc/preft.cpp
+        src/misc/preft.h
         src/Engine/Search.cpp
         src/Engine/Search.h
         src/Uci.cpp
@@ -53,6 +53,12 @@ add_executable(chessEngine
         src/Engine/TranspositionTable.h
         src/Engine/Zobrist.h
         src/main.cpp
+        src/misc/pgn_extract.h
+        src/Engine/PawnHash.h
+        src/misc/LazyStats.h
+        src/misc/LazyStats.cpp
+        src/Engine/PawnTT.cpp
+        src/Engine/PawnTT.h
 )
 target_compile_definitions(chessEngine PRIVATE
         ENGINE_NAME="${ENGINE_NAME}"

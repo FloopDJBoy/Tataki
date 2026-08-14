@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "OpeningBook.h"
+#include "PawnTT.h"
 #include "SearchLimits.h"
 #include "TranspositionTable.h"
 
@@ -75,6 +76,7 @@ namespace Engine {
         std::atomic_bool stop{false};
         SearchStack stack[PV::MAX_PLY + 10];
         TranspositionTable& tt;
+        PawnTT& pawn_tt;
         Score alpha_beta(Score alpha, Score beta,int depth,SearchStack* ss);
         [[nodiscard]] bool should_stop() const;
         template <bool in_check>
@@ -84,7 +86,7 @@ namespace Engine {
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
         public:
         void stop_search() {stop.store(true,std::memory_order_relaxed);}
-        Search(const ChessCore::Position &p,const SearchLimits& search_limits,TranspositionTable& t) :pos(p.copy_for_search()),limits(search_limits),tt(t) {};
+        Search(const ChessCore::Position &p,const SearchLimits& search_limits,TranspositionTable& t,PawnTT& pawn_t) :pos(p.copy_for_search()),limits(search_limits),tt(t),pawn_tt(pawn_t) {};
 
         ChessCore::Move find_best_move();
 

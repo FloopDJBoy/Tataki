@@ -11,6 +11,7 @@
 #include "Engine/Zobrist.h"
 #include "Engine/Eval.h"
 #include "Engine/OpeningBook.h"
+#include "Engine/PawnHash.h"
 
 namespace ChessCore {
     using enum PieceType;
@@ -116,6 +117,7 @@ namespace ChessCore {
         update_slider_blockers(Color::BLACK);
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
         current_state_.zobrist_key = zobrist_key(true);
+        current_state_.pawn_key = 0;
 
         for (const Color c : {Color::WHITE, Color::BLACK}) {
             BitBoard bb = color_bb(c);
@@ -125,8 +127,12 @@ namespace ChessCore {
                 const auto ci = color_idx(c);
 
                 current_state_.material_score[ci] +=Eval::evaluate_piece(p,s);
+                if (Pieces::getType(p) == PAWN) {
+                    current_state_.pawn_key ^= PawnHash::hash(c,s);
+                }
             }
         }
+
     }
     void Position::make_move(const Move move) {
 
@@ -142,19 +148,20 @@ namespace ChessCore {
 
         //ref to old state
         const auto& st = push_state(move,captured);
-        Key& key = current_state_.zobrist_key;
+        Key& zobrist_key = current_state_.zobrist_key;
+        Key& pawn_key = current_state_.pawn_key;
 
         bool half_clock_move = captured != Pieces::EMPTY;
 
         if (st.ep_square != NO_SQUARE)
-            key ^= Engine::Zobrist::ep_key(st.ep_square);
+            zobrist_key ^= Engine::Zobrist::ep_key(st.ep_square);
         if (st.castling_rights != CastlingRight::None) {
-            key ^= Engine::Zobrist::castling_key(st.castling_rights);
+            zobrist_key ^= Engine::Zobrist::castling_key(st.castling_rights);
         }
         handle_castling_rights(move);
 
         if (current_state_.castling_rights != CastlingRight::None)
-            key ^= Engine::Zobrist::castling_key(current_state_.castling_rights);
+            zobrist_key ^= Engine::Zobrist::castling_key(current_state_.castling_rights);
 
         board.move_piece(from, to);
 
@@ -165,8 +172,10 @@ namespace ChessCore {
 
                 half_clock_move = true;
                 const auto promo =  makePiece(move.promotion_type(), us);
-                key ^= Engine::Zobrist::piece_key(moving, from);
-                key ^= Engine::Zobrist::piece_key(promo, to);
+                zobrist_key ^= Engine::Zobrist::piece_key(moving, from);
+                zobrist_key ^= Engine::Zobrist::piece_key(promo, to);
+
+                pawn_key ^= Engine::PawnHash::hash(us,from);
 
                 board.remove_piece(to);
                 board.set_piece(to,promo);
@@ -193,8 +202,8 @@ namespace ChessCore {
                 board.set_piece(rook_end, Pieces::makePiece(PieceType::ROOK, us));
                 const Piece rook = Pieces::makePiece(PieceType::ROOK, us);
                 current_state_.material_score[color_idx(us)] +=Eval::evaluate_piece(rook, rook_end) -Eval::evaluate_piece(rook, rook_start);
-                key ^= Engine::Zobrist::piece_key(rook, rook_start);
-                key ^= Engine::Zobrist::piece_key(rook, rook_end);
+                zobrist_key ^= Engine::Zobrist::piece_key(rook, rook_start);
+                zobrist_key ^= Engine::Zobrist::piece_key(rook, rook_end);
                 break;
             }
             case MoveType::EN_PASSANT: {
@@ -204,31 +213,39 @@ namespace ChessCore {
             }
         }
 
-        if (Pieces::getType(square(to)) == PAWN) {
+        if (Pieces::getType(moving) == PAWN) {
             half_clock_move = true;
             current_state_.ep_square = (std::abs(to - from) == 16) ? to - offset : NO_SQUARE;
         } else {
             current_state_.ep_square = NO_SQUARE;
         }
         if (current_state_.ep_square != NO_SQUARE)
-            key ^= Engine::Zobrist::ep_key(current_state_.ep_square);
+            zobrist_key ^= Engine::Zobrist::ep_key(current_state_.ep_square);
 
         current_state_.half_clock = half_clock_move ? 0 : current_state_.half_clock + 1;
         if (captured != Pieces::EMPTY) {
-            key ^= Zobrist::piece_key(captured, captured_square);
+            zobrist_key ^= Zobrist::piece_key(captured, captured_square);
+
             current_state_.material_score[color_idx(them)] -= Eval::evaluate_piece(captured, captured_square);
             current_state_.phase -= Eval::phase_value(Pieces::getType(captured));
+
+            pawn_key ^= PawnHash::hash(them,captured_square);
         }
         if (type != MoveType::PROMOTION) {
             current_state_.material_score[color_idx(us)] += Eval::evaluate_piece(moving,to) - Eval::evaluate_piece(moving,from);
-            key ^= Zobrist::piece_key(moving, from);
-            key ^= Zobrist::piece_key(moving, to);
+            zobrist_key ^= Zobrist::piece_key(moving, from);
+            zobrist_key ^= Zobrist::piece_key(moving, to);
+            if(Pieces::getType(moving) == PAWN) {
+                pawn_key ^= PawnHash::hash(us,from);
+                pawn_key ^= PawnHash::hash(us,to);
+            }
+
         }
         if (us == Color::BLACK) {
             ++fullmove_number_;
         }
         swap_side();
-        key ^= Engine::Zobrist::tables.side_to_move;
+        zobrist_key ^= Engine::Zobrist::tables.side_to_move;
         update_slider_blockers(side_to_move());
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
                    color_bb(~side_to_move());
@@ -236,7 +253,7 @@ namespace ChessCore {
         repetition = 0;
         if (current_state_.half_clock >= 4) {
             for (int p = ply() - 2, i = 4;i <= current_state_.half_clock;p -= 2, i += 2) {
-                if (history[p].zobrist_key == key) {
+                if (history[p].zobrist_key == zobrist_key) {
                     ++repetition;
 
                     if (repetition >= 2)
@@ -438,6 +455,9 @@ namespace ChessCore {
             (BitBoards::get_attacks_bb<PieceType::KING>(s) & piece_bb(PieceType::KING));
     }
     bool Position::is_insufficient_material() const {
+        if (std::popcount(all_bb()) > 4) {
+            return false;
+        }
         BitBoard major_and_pawns = piece_bb(PieceType::PAWN) | piece_bb(PieceType::ROOK) | piece_bb(PieceType::QUEEN);
 
         if (major_and_pawns != 0) {

@@ -28,7 +28,7 @@ namespace Engine {
                 return;
             }
         }
-        searcher = std::make_unique<Search>(position, limits,tt);
+        searcher = std::make_unique<Search>(position, limits,tt,pawn_tt);
 
         searching.store(true);
 

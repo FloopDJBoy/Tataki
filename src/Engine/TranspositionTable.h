@@ -35,7 +35,7 @@ namespace Engine {
         std::unique_ptr<TTEntry[]> tt;
         uint8_t generation = 0;
         public:
-        int replacement_score(const TTEntry& e) const;
+        [[nodiscard]] int replacement_score(const TTEntry& e) const;
         TranspositionTable();
         TTEntry* operator [](Key key);
         void insert(Key key,Score score,int16_t depth ,ChessCore::Move best_move,Bound bound);
