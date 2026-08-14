@@ -99,7 +99,7 @@ namespace ChessCore {
         [[nodiscard]] Key pawn_key() const {return state().pawn_key;}
         [[nodiscard]] bool is_3fold() const {return repetition >= 2;}
         [[nodiscard]] bool is_insufficient_material() const;
-        [[nodiscard]] bool is_draw() const {return is_3fold();}
+        [[nodiscard]] bool is_draw() const {return is_3fold() || state().half_clock>=100 || is_insufficient_material();}
 #ifndef NDEBUG
         void verify_zobrist() const {
             assert(current_state_.zobrist_key == zobrist_key(true));

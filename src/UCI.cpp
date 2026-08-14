@@ -16,10 +16,9 @@
 namespace UCI {
     using std::string;
     namespace {
-        void parse_position(
-    ChessCore::Position& pos,
-    const std::string& command)
+        ChessCore::Position parse_position(const std::string& command)
         {
+            ChessCore::Position pos = ChessCore::FenHelper::STARTING_POSITION;
             std::istringstream ss(command);
             std::string token;
 
@@ -56,6 +55,7 @@ namespace UCI {
                     pos.make_move(move);
                 }
             }
+            return pos;
         }
         Engine::SearchLimits parse_go(const std::string& command) {
             Engine::SearchLimits limits;
@@ -104,7 +104,7 @@ namespace UCI {
         string command;
         Engine::Engine engine("assets/opening_books/Perfect2023.bin");
         ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
-        std::cerr << pos.fen() << std::endl;
+        //std::cerr << pos.fen() << std::endl;
         assert(pos.fen() == ChessCore::FenHelper::STARTING_POSITION_FEN);
         engine.set_position(pos);
         engine.on_search_finished([](ChessCore::Move move) {
@@ -135,7 +135,7 @@ namespace UCI {
                 engine.go(limits);
             }
             else if (command.starts_with("position")) {
-                parse_position(pos,command);
+                pos = parse_position(command);
                 engine.set_position(pos);
             }else if (command == "quit") {
                 break;
