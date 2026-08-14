@@ -55,11 +55,13 @@ namespace ChessCore::BitBoards {
         RIGHT,
         LEFT
     };
+
     constexpr Square pop_lsb(BitBoard& bb) {
         const int index = std::countr_zero(bb);
         bb = bb & (bb - 1);
         return index;
     }
+
     constexpr BitBoard set_square(const BitBoard b, const Square s) {
          return  b | (1ull<<s);
     }
@@ -89,6 +91,61 @@ namespace ChessCore::BitBoards {
     }
     constexpr int rank_of(const Square s) {
         return s/8;
+    }
+    constexpr BitBoard get_file_bb(const Square s) {
+        return FILE_A << file_of(s); //
+    }
+
+    constexpr BitBoard get_adjacent_files(const Square s) {
+        const BitBoard f = get_file_bb(s);
+        return ((f << 1) & ~FILE_A) | ((f >> 1) & ~FILE_H);
+    }
+    struct PawnMasks {
+        std::array<std::array<BitBoard, 64>, 2> passed_masks{};
+        std::array<std::array<BitBoard, 64>, 2> backward_masks{};
+        std::array<BitBoard, 64> adjacent_files{};
+    };
+    constexpr PawnMasks make_pawn_masks() {
+        PawnMasks masks{};
+        for (int s = 0; s < 64; ++s) {
+            const BitBoard file = get_file_bb(s);
+            const BitBoard adj = get_adjacent_files(s);
+            masks.adjacent_files[s] = adj;
+
+            BitBoard front_w = 0, front_b = 0;
+            BitBoard rear_w = 0, rear_b = 0;
+
+            constexpr int white_idx = color_idx(Color::WHITE);
+            constexpr int black_idx = color_idx(Color::BLACK);
+
+            const auto [x, y] = square_to_cord(s);
+
+            for (int r = y + 1; r < 8; ++r) front_w |= (file | adj) & (RANK_1 << (r * 8));
+            for (int r = y - 1; r >= 0; --r) front_b |= (file | adj) & (RANK_1 << (r * 8));
+
+            // For backward pawns: we check if there are friendly pawns adjacent and behind us
+            for (int r = y; r >= 0; --r) rear_w |= adj & (RANK_1 << (r * 8));
+            for (int r = y; r < 8; ++r)  rear_b |= adj & (RANK_1 << (r * 8));
+
+            masks.passed_masks[white_idx][s] = front_w;
+            masks.passed_masks[black_idx][s] = front_b;
+            masks.backward_masks[white_idx][s] = rear_w;
+            masks.backward_masks[black_idx][s] = rear_b;
+        }
+        return masks;
+    }
+    inline constexpr PawnMasks PAWN_MASKS = make_pawn_masks();
+
+    constexpr int count_islands(const BitBoard pawns) {
+        // Smear all bits down to rank 1 (files A-H)
+        BitBoard f = pawns;
+        f |= f >> 32;
+        f |= f >> 16;
+        f |= f >> 8;
+        f &= RANK_1;
+
+        // Count bit transitions from 0 to 1
+        return std::popcount(f & ~(f << 1));
     }
 
 

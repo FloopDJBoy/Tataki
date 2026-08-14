@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "OpeningBook.h"
+#include "PawnTT.h"
 #include "Search.h"
 #include "ChessCore/FenHelper.h"
 
@@ -18,6 +19,7 @@ namespace Engine {
         ChessCore::Position position;
         constexpr static bool enable_book = true;
         TranspositionTable tt;
+        PawnTT pawn_tt;
         std::unique_ptr<Search> searcher;
         std::jthread search_thread;
 
@@ -40,6 +42,10 @@ namespace Engine {
 
         ~Engine();
 
+        void clear() {
+            tt.clear();
+            pawn_tt.clear();
+        }
         void set_position(const ChessCore::Position& pos);
         void on_search_finished(const std::function<void(ChessCore::Move)> &callback) {on_search_finished_ = callback;};
         void go(const SearchLimits& limits);

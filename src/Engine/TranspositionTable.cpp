@@ -21,7 +21,7 @@ namespace Engine {
         return quality;
     }
 
-    TTEntry* TranspositionTable::operator[](const Key key) {
+    inline TTEntry* TranspositionTable::operator[](const Key key) {
         TTEntry* bucket = &tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE];
 
         for (int i = 0; i < BUCKET_SIZE; ++i) {
@@ -71,12 +71,12 @@ namespace Engine {
             *replace_candidate = TTEntry{.key = key, .score = score, .depth = depth, .best_move = best_move, .bound = bound, .age = generation};
         }
     }
-    void TranspositionTable::clear() {
+    inline void TranspositionTable::clear() {
         generation = 0;
-        std::ranges::fill(
+        std::memset(
             tt.get(),
-            tt.get() + NUM_BUCKETS * BUCKET_SIZE,
-            TTEntry{}
+            0,
+            NUM_BUCKETS * BUCKET_SIZE * sizeof(TTEntry)
         );
     }
 } // Engine

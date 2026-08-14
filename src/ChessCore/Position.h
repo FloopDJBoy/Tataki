@@ -21,8 +21,8 @@ namespace ChessCore {
 
         //scoring
         std::array<ScorePair,2> material_score;
-
         uint8_t phase;
+        Key pawn_key;
     };
     class Position {
         static constexpr int16_t MAX_PLY = 512;
@@ -96,10 +96,15 @@ namespace ChessCore {
         [[nodiscard]] auto generate_moves() const {return MoveGen::MoveList<type>(*this);}
         [[nodiscard]] bool in_check() const {return checkers();}
         [[nodiscard]] Key zobrist_key() const {return zobrist_key(false);}
+        [[nodiscard]] Key pawn_key() const {return state().pawn_key;}
         [[nodiscard]] bool is_3fold() const {return repetition >= 2;}
         [[nodiscard]] bool is_insufficient_material() const;
-        [[nodiscard]] bool is_draw() const {return is_3fold() || is_insufficient_material();}
-        void verify_zobrist() const {assert(current_state_.zobrist_key == zobrist_key(true));}
+        [[nodiscard]] bool is_draw() const {return is_3fold();}
+#ifndef NDEBUG
+        void verify_zobrist() const {
+            assert(current_state_.zobrist_key == zobrist_key(true));
+        }
+#endif
         [[nodiscard]] int ply() const {return ply_;}
 
 

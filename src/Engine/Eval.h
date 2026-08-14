@@ -5,6 +5,7 @@
 #ifndef CHESSENGINE_EVAL_H
 #define CHESSENGINE_EVAL_H
 #include "magic_enum.hpp"
+#include "PawnTT.h"
 #include "Types.h"
 #include "ChessCore/Pieces.h"
 
@@ -270,6 +271,7 @@ namespace Engine::Eval {
         return phase_arr[static_cast<int>(p)];
     }
     Score evaluate(const ChessCore::Position& pos);
+    Score evaluate(const ChessCore::Position& pos,PawnTT* pawn_tt,Score alpha,Score beta);
     inline ScorePair evaluate_piece(const Piece piece, const Square s){
         return PSQT[piece][s];
     }

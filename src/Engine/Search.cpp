@@ -71,7 +71,7 @@ namespace Engine {
         Score best_score;
 
         if constexpr (!in_check) {
-            const Score stand_pat = Eval::evaluate(pos);
+            const Score stand_pat = Eval::evaluate(pos,alpha,beta);
 
             if (stand_pat >= beta)
                 return stand_pat;

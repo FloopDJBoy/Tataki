@@ -7,7 +7,7 @@
 #include <string>
 
 #include "UCI.h"
-#include "ChessCore/preft.h"
+#include "misc/preft.h"
 #include "ChessCore/FenHelper.h"
 #include "ChessCore/Move.h"
 #include "ChessCore/Position.h"
@@ -125,7 +125,7 @@ namespace UCI {
                 std::istringstream ss(command);
                 ss >> token; //"go"
                 ss >> token;
-                if (token == "preft") {
+                if (token == "perft") {
                     int depth;
                     ss >> depth;
                     ChessCore::preft::test(pos, depth);
@@ -143,6 +143,11 @@ namespace UCI {
                 engine.stop();
             }else if (command == "getfen") {
                 std::cerr << "fen " << pos.fen() << std::endl;
+            }else if (command == "ucinewgame") {
+                engine.stop();
+                engine.clear();
+                pos = ChessCore::FenHelper::STARTING_POSITION;
+                engine.set_position(pos);
             }
         }
     }
