@@ -17,7 +17,7 @@ namespace Engine {
     class Engine {
         OpeningBook book;
         ChessCore::Position position;
-        constexpr static bool enable_book = true;
+        bool enable_book_ = true;
         TranspositionTable tt;
         PawnTT pawn_tt;
         std::unique_ptr<Search> searcher;
@@ -46,8 +46,14 @@ namespace Engine {
             tt.clear();
             pawn_tt.clear();
         }
+        void set_book(const std::string& book_path){book = OpeningBook(book_path);}
+        void enable_book(const bool enable) {enable_book_ = enable;}
         void set_position(const ChessCore::Position& pos);
-        void on_search_finished(const std::function<void(ChessCore::Move)> &callback) {on_search_finished_ = callback;};
+        void on_search_finished(const std::function<void(ChessCore::Move)> &callback) {on_search_finished_ = callback;}
+
+        void set_tt_size(const size_t megabytes) {
+            tt = TranspositionTable(megabytes);
+        }
         void go(const SearchLimits& limits);
         void stop();
         void wait_until_search_finished() const;

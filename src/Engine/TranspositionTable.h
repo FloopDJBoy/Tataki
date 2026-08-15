@@ -20,10 +20,11 @@ namespace Engine {
     };                                // Total: 16 bytes
     static_assert(sizeof(TTEntry) == 16);
     class TranspositionTable {
-        constexpr static size_t NUM_BUCKETS = 1ull << 24; //1GB or 16,777,216 buckets
+        size_t NUM_BUCKETS;
         constexpr static int BUCKET_SIZE = 4;
+        constexpr static size_t BYTES_PER_MB = 1024ull * 1024ull;
         static_assert(sizeof(TTEntry)*BUCKET_SIZE == 64);
-        constexpr static Score MATE_THRESHOLD = Eval::MATE_SCORE -1000;
+
 
         constexpr static int AGE_PENALTY = 4;
         constexpr static int EXACT_BONUS = 2;
@@ -36,7 +37,8 @@ namespace Engine {
         uint8_t generation = 0;
         public:
         [[nodiscard]] int replacement_score(const TTEntry& e) const;
-        TranspositionTable();
+        explicit TranspositionTable(size_t megabytes);
+        TranspositionTable() : TranspositionTable(128) {}
         TTEntry* operator [](Key key) {
             TTEntry* bucket = &tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE];
 
@@ -52,20 +54,20 @@ namespace Engine {
             ++generation;
         }
         static Score value_to_tt(const Score score, const int ply) {
-            if (score > MATE_THRESHOLD)
+            if (score > Eval::MATE_THRESHOLD)
                 return score + ply;
 
-            if (score < -MATE_THRESHOLD)
+            if (score < -Eval::MATE_THRESHOLD)
                 return score - ply;
 
             return score;
         }
 
         static Score value_from_tt(const Score score, const int ply) {
-            if (score > MATE_THRESHOLD)
+            if (score > Eval::MATE_THRESHOLD)
                 return score - ply;
 
-            if (score < -MATE_THRESHOLD)
+            if (score < -Eval::MATE_THRESHOLD)
                 return score + ply;
 
             return score;

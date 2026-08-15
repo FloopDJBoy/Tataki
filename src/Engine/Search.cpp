@@ -312,7 +312,6 @@ namespace Engine {
         if (limits.nodes && nodes >= limits.nodes) {
             return true;
         }
-        const auto now = Clock::now();
         if (search_deadline != std::chrono::time_point<Clock>::max() && Clock::now() >= search_deadline) {
             return true;
         }
@@ -333,7 +332,7 @@ namespace Engine {
         }
 
         const auto tt_entry = tt[pos.zobrist_key()];
-        Move tt_move = tt_entry ? tt_entry->best_move : Move::none();
+        const Move tt_move = tt_entry ? tt_entry->best_move : Move::none();
 
         std::array<int, 256> scores{};
         for (int i = 0; i < move_count; ++i) {
@@ -413,22 +412,26 @@ namespace Engine {
                 best_move = move;
             }
 
-            std::cout
-                << "info depth "
-                << depth
-                << " score cp "
-                << score
-                << " time "
-                << time_ms
-                << " nodes "
-                << nodes
-                << " nps "
-                << nps
-                << " pv ";
+            std::cout << "info depth " << depth;
+
+            if (score > Eval::MATE_THRESHOLD) {
+                std::cout << " score mate " << (Eval::MATE_SCORE - score);
+            } else if (score < -Eval::MATE_THRESHOLD) {
+                std::cout << " score mate " << (-Eval::MATE_SCORE - score);
+            } else {
+                std::cout << " score cp " << score;
+            }
+
+            std::cout << " time " << time_ms
+                      << " nodes " << nodes
+                      << " nps " << nps
+                      << " pv ";
+
             for (const auto& pv_move : ss->pv) {
                 std::cout << pv_move.to_string() << ' ';
             }
-            std::cout << std::endl;
+
+            std::cout << '\n';
 
             if (limits.depth && depth >= limits.depth) {
                 return best_move;

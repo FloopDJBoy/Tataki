@@ -16,6 +16,11 @@
 namespace UCI {
     using std::string;
     namespace {
+        std::array options = {
+            "option name OwnBook type check default true",
+            "option name BookFile type string default Perfect2023.bin",
+            "option name Hash type spin default 128 min 1 max 4096"
+        };
         ChessCore::Position parse_position(const std::string& command)
         {
             ChessCore::Position pos = ChessCore::FenHelper::STARTING_POSITION;
@@ -99,6 +104,33 @@ namespace UCI {
             }
             return limits;
         }
+        void parse_set_option(const std::string& command,Engine::Engine& engine) {
+            std::istringstream ss(command);
+            std::string token;
+            ss >> token; //setoption
+            ss >> token; // name
+
+            ss >>  token;
+            if (token == "OwnBook") {
+                ss >> token; // value
+                bool enabled;
+                ss >> std::boolalpha >> enabled;
+                engine.enable_book(enabled);
+            }
+            else if (token == "BookFile") {
+                ss >> token; // value
+
+                std::string path;
+                std::getline(ss >> std::ws, path);
+
+                engine.set_book(path);
+            }else if (token == "Hash") {
+                ss>>token; //value
+                size_t tt_size;
+                ss>>tt_size;
+                engine.set_tt_size(tt_size);
+            }
+        }
     }
     void loop() {
         string command;
@@ -107,7 +139,7 @@ namespace UCI {
         //std::cerr << pos.fen() << std::endl;
         assert(pos.fen() == ChessCore::FenHelper::STARTING_POSITION_FEN);
         engine.set_position(pos);
-        engine.on_search_finished([](ChessCore::Move move) {
+        engine.on_search_finished([](const ChessCore::Move move) {
                    std::cout << "bestmove "
                              << move.to_string()
                              << std::endl;
@@ -116,6 +148,9 @@ namespace UCI {
             if (command == "uci") {
                 std::cout << "id name "<< ENGINE_NAME << " " << ENGINE_VERSION << std::endl;
                 std::cout << "id author FloopDJBoy" << std::endl;
+                for (const auto& option : options) {
+                    std::cout << option << std::endl;
+                }
                 std::cout << "uciok" << std::endl;
             }
             else if (command == "isready") {
@@ -125,7 +160,7 @@ namespace UCI {
                 std::istringstream ss(command);
                 ss >> token; //"go"
                 ss >> token;
-                if (token == "perft") {
+                if (token == "preft") {
                     int depth;
                     ss >> depth;
                     ChessCore::preft::test(pos, depth);
@@ -148,6 +183,8 @@ namespace UCI {
                 engine.clear();
                 pos = ChessCore::FenHelper::STARTING_POSITION;
                 engine.set_position(pos);
+            }else if (command.starts_with("setoption")) {
+
             }
         }
     }

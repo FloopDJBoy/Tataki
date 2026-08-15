@@ -8,8 +8,11 @@
 #include <limits>
 
 namespace Engine {
-    TranspositionTable::TranspositionTable(): tt(std::make_unique<TTEntry[]>(NUM_BUCKETS * BUCKET_SIZE))
+    TranspositionTable::TranspositionTable(const size_t megabytes) :
+        NUM_BUCKETS((megabytes * BYTES_PER_MB) /(sizeof(TTEntry) * BUCKET_SIZE)),
+        tt(std::make_unique<TTEntry[]>(NUM_BUCKETS * BUCKET_SIZE))
     {}
+
     int TranspositionTable::replacement_score(const TTEntry &e) const {
         // Unsigned 8-bit underflow naturally handles generation wrap-around
         const uint8_t age_diff = generation - e.age;

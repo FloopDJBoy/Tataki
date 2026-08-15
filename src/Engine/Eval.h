@@ -28,6 +28,7 @@ namespace Engine::Eval {
         4 * BISHOP_PHASE +
         4 * ROOK_PHASE +
         2 * QUEEN_PHASE;
+
     constexpr ScorePair mobility_bonus[4][28] = {
         // [0] KNIGHT (9 active elements: 0..8)
         {
@@ -249,6 +250,7 @@ namespace Engine::Eval {
     constexpr Score INF = 32000;
     constexpr Score MATE_SCORE = 30000;
     constexpr Score NEG_INF = -INF;
+    constexpr static Score MATE_THRESHOLD = Eval::MATE_SCORE -1000;
     static constexpr auto make_PSQT() {
         std::array<std::array<ScorePair,64>,15> arr{};
         for (const auto c : magic_enum::enum_values<Color>()) {

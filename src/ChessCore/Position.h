@@ -17,6 +17,7 @@ namespace ChessCore {
         Piece captured;
         Square ep_square;
         CastlingRight castling_rights;
+        int repetition;  //3 fold repetition counter
         int half_clock;
 
         //scoring
@@ -35,7 +36,6 @@ namespace ChessCore {
         int16_t ply_;
         int16_t root_ply_ = 0; // ply_ value when this copy was handed to Search
         int32_t fullmove_number_;
-        int repetition = 0; //3 fold repetition counter
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
         public:
@@ -97,7 +97,7 @@ namespace ChessCore {
         [[nodiscard]] bool in_check() const {return checkers();}
         [[nodiscard]] Key zobrist_key() const {return zobrist_key(false);}
         [[nodiscard]] Key pawn_key() const {return state().pawn_key;}
-        [[nodiscard]] bool is_3fold() const {return repetition >= 2;}
+        [[nodiscard]] bool is_3fold() const {return state().repetition >= 1;}
         [[nodiscard]] bool is_insufficient_material() const;
         [[nodiscard]] bool is_draw() const {return is_3fold() || state().half_clock>=100 || is_insufficient_material();}
 #ifndef NDEBUG

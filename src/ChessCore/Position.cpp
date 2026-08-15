@@ -250,12 +250,12 @@ namespace ChessCore {
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
                    color_bb(~side_to_move());
 
-        repetition = 0;
+        current_state_.repetition = 0;
         if (current_state_.half_clock >= 4) {
-            for (int p = ply_ - 2, i = 4; i <= current_state_.half_clock && p >= 0; p -= 2, i += 2) {
+            for (int p = ply_ - 4, i = 4; i <= current_state_.half_clock && p >= 0; p -= 2, i += 2) {
                 if (history[p].zobrist_key == zobrist_key) {
-                    ++repetition;
-                    if (repetition >= 2)
+                    ++current_state_.repetition;
+                    if (current_state_.repetition >= 1)
                         break;
                 }
             }

@@ -20,7 +20,7 @@ namespace Engine {
     {
         start_time = Clock::now();
         stop();
-        if constexpr (enable_book) {
+        if (enable_book_) {
             auto book_move = book[position];
             if (book_move!= ChessCore::Move::none()) {
                 best_move_ = book_move;
