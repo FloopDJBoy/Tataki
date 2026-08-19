@@ -57,7 +57,7 @@ namespace Engine {
 
             return nullptr;
         }
-        void insert(Key key,Score score,int16_t depth ,ChessCore::Move best_move,Bound bound);
+        void insert(Key key,Score score,int16_t depth ,ChessCore::Move best_move,Bound bound,bool is_pv);
         void new_search() {
             ++generation;
         }

@@ -170,23 +170,21 @@ namespace Engine {
         }
 
    }
-   template<NodeType node_type>
-   Score Search::alpha_beta(Score alpha, const Score beta, const int depth, SearchStack* ss) {
-        constexpr bool pv_node = node_type != NodeType::NonPV;
+    template<NodeType node_type>
+    Score Search::alpha_beta(Score alpha, const Score beta, const int depth, SearchStack* ss) {
+        constexpr bool PvNode   = node_type != NodeType::NonPV;
+        constexpr bool RootNode = node_type == NodeType::Root;
+
         ss->pv.clear();
-        ss->stat_score=0;
-        if ((++nodes & 1023) == 0 && should_stop()) {
-            stop_search();
-        }
-        if (stop.load(std::memory_order_relaxed)) {
-            return 0;
-        }
+        ss->stat_score = 0;
 
-        if (pos.ply() >= PV::MAX_PLY - 1)
-            return Eval::evaluate(pos);
 
-        if (pos.is_draw()) {
-            return 0;
+        if ((++nodes & 1023) == 0 && should_stop()) stop_search();
+        if (stop.load(std::memory_order_relaxed)) return 0;
+
+        if constexpr (!RootNode) {
+            if (pos.ply() >= PV::MAX_PLY - 1) return Eval::evaluate(pos);
+            if (pos.is_draw()) return 0;
         }
 
         if (depth <= 0) {
@@ -196,153 +194,132 @@ namespace Engine {
         DumbVector<Move,SEARCHED_LIST_CAPACITY> captured_searched;
         const Key zobrist_key = pos.zobrist_key();
         const Engine::TTEntry* tt_entry = tt[zobrist_key];
-#if DEBUG_STATS
-        ++stats.tt_probes;
-#endif
         Move tt_move = Move::none();
         const Score original_alpha = alpha;
 
         if (tt_entry) {
-#if DEBUG_STATS
-            stats.tt_hits++;
-#endif
-            // Extract TT move regardless of depth for move ordering
-            if (tt_entry->best_move != ChessCore::Move::none()) {
-                tt_move = tt_entry->best_move;
-            }
+            ss->ttPv = PvNode || tt_entry->is_pv();
+            if (tt_entry->best_move != Move::none()) tt_move = tt_entry->best_move;
 
-            if (tt_entry->depth >= depth) {
-#if DEBUG_STATS
-                stats.tt_depth_sufficient++;
-#endif
-                const Score tt_score = TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
-                switch (tt_entry->bound()) {
-                    case Bound::EXACT:
-#if DEBUG_STATS
-                        stats.tt_cutoffs++;
-                        stats.tt_exact_cutoffs++;
-#endif
-                        if (tt_move != Move::none()) {
-                            ss->pv.update(tt_move);
-                        }
-                        return tt_score;
-
-                    case Bound::LOWER:
-                        if (tt_score >= beta) {
-#if DEBUG_STATS
-                            stats.tt_cutoffs++;
-                            stats.tt_lower_cutoffs++;
-#endif
-                            if (tt_move != Move::none()) {
-                                ss->pv.update(tt_move);
+            if constexpr (!RootNode) {
+                if (tt_entry->depth >= depth) {
+                    const Score tt_score = TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
+                    switch (tt_entry->bound()) {
+                        case Bound::EXACT:
+                            if (tt_move != Move::none()) ss->pv.update(tt_move);
+                            return tt_score;
+                        case Bound::LOWER:
+                            if (tt_score >= beta) {
+                                if (tt_move != Move::none()) ss->pv.update(tt_move);
+                                return tt_score;
                             }
-                            return tt_score;
-                        }
-                        break;
-
-                    case Bound::UPPER:
-                        if (tt_score <= alpha) {
-#if DEBUG_STATS
-                            stats.tt_cutoffs++;
-                            stats.tt_upper_cutoffs++;
-#endif
-                            return tt_score;
-                        }
-                        break;
+                            break;
+                        case Bound::UPPER:
+                            if (tt_score <= alpha) return tt_score;
+                            break;
+                    }
                 }
             }
+        }
+
+        constexpr int   RFP_MAX_DEPTH           = 8;   // free parameter, tune via SPRT
+        constexpr Score RFP_MARGIN_PER_DEPTH    = 80;  // free parameter
+        constexpr Score RFP_IMPROVING_REDUCTION = 60;  // free parameter
+
+        ss->staticEval = pos.in_check()
+            ? (pos.ply() >= 2 ? (ss - 2)->staticEval : 0)
+            : Eval::evaluate(pos);
+
+        if (!pos.in_check()
+            && depth <= RFP_MAX_DEPTH
+            && (tt_move == Move::none() || pos.is_capture(tt_move))
+            && beta > -Eval::MATE_THRESHOLD          // beta isn't already a "we're getting mated" bound
+            && ss->staticEval < Eval::MATE_THRESHOLD // eval isn't already a near-mate winning score
+        ) {
+            const bool improving = pos.ply() >= 2 && ss->staticEval > (ss - 2)->staticEval;
+
+            Score margin = RFP_MARGIN_PER_DEPTH * depth;
+            if (improving) margin -= RFP_IMPROVING_REDUCTION;
+
+            if (ss->staticEval - margin >= beta)
+                return ss->staticEval; // fail-soft; the (eval+beta)/2-style tweaks are a later tuning knob
         }
 
         Score best_score = -Eval::INF;
         Move best_move = Move::none();
         bool found_move = false;
-        MovePicker move_picker(pos,tt_move,depth,capture_history);
-        int i=0;
-        for (Move move = move_picker.next_move();move != Move::none();move = move_picker.next_move()) {
-            if (!pos.legal(move)) {
-                continue;
-            }
+
+        if constexpr (RootNode) {
+            if (auto legal = pos.legal_moves(); !legal.empty())
+                ss->pv.update(legal[0]);   // fallback if we're interrupted before improving alpha
+        }
+
+        MovePicker move_picker(pos, tt_move, depth, capture_history);
+        int i = 0;
+        for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
+            if (!pos.legal(move)) continue;
             ++i;
             found_move = true;
             const bool capture = pos.is_capture(move);
-            const Piece moved_piece = pos.square(move.from());
+            Piece moved_piece = pos.square(move.from());
             tt.prefetch(pos.prefetch_key(move));
             pos.make_move(move);
             if (capture) {
-                const int captured_type =static_cast<int>(Pieces::getType(pos.state().captured));
+                const int captured_type = static_cast<int>(Pieces::getType(pos.state().captured));
                 const auto captured_value = Eval::piece_value(pos.state().captured);
-                ss->stat_score =History::capture_stat_victim_value(captured_value) + capture_history[moved_piece][move.to()][captured_type]; ////NOLINT
+                ss->stat_score = History::capture_stat_victim_value(captured_value)
+                               + capture_history[moved_piece][move.to()][captured_type];
             }
+
             Score score;
-            if constexpr (pv_node) {
-                if (i == 0) {
-                    score = -alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1);
+            if constexpr (PvNode) {
+                //PVS
+                if (i == 1) {
+                    score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1));
                 } else {
-                    score = -alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, depth - 1, ss + 1); // null window
-                    if (score > alpha && score < beta) {
-                        score = -alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1); // re-search
-                    }
+                    score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, depth - 1, ss + 1));
+                    if (score > alpha && score < beta)
+                        score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1));
                 }
-            }else {
-                score = -alpha_beta<NodeType::NonPV>(-beta, -alpha, depth - 1, ss + 1);
+            } else {
+                score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-beta, -alpha, depth - 1, ss + 1));
             }
             pos.undo_move();
 
-            if (stop.load(std::memory_order_relaxed)) {
-                return 0;
-            }
-#if DEBUG_STATS
-            if (best_score<= original_alpha) {
-                stats.fail_low++;
-            }
-#endif
+            if (stop.load(std::memory_order_relaxed)) return 0;
 
-            const int old_alpha = alpha;
             if (score > best_score) {
                 best_score = score;
-                best_move = move;
-
                 if (score > alpha) {
+                    best_move = move;
                     alpha = score;
                     ss->pv.update(move, (ss + 1)->pv);
                 }
             }
-            if (capture) {
-                if (alpha <= old_alpha &&  i <= SEARCHED_LIST_CAPACITY) {
-                    captured_searched.push_back(move); //add it to get malus later
-                }
-            }
-            if (alpha >= beta) {
-#if DEBUG_STATS
-                stats.beta_cutoffs++;
-                stats.fail_high++;
-#endif
-                break;
-            }
+            if (capture && move != best_move && i <= SEARCHED_LIST_CAPACITY)
+                captured_searched.push_back(move);
+
+            if (alpha >= beta) break;
         }
 
-        if (!found_move) {
-            if (pos.in_check()) {
-                return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
+        if constexpr (!RootNode) {
+            if (!found_move) {
+                if (pos.in_check()) return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
+                return 0;
             }
-            return 0; // Stalemate
         }
 
         if (!stop.load(std::memory_order_relaxed)) {
-            Bound bound;
-            if (best_score <= original_alpha)
-                bound = Bound::UPPER;
-            else {
-                if (best_score >= beta)
-                    bound = Bound::LOWER;
-                else
-                    bound = Bound::EXACT;
+            Bound bound = (best_score <= original_alpha) ? Bound::UPPER
+                         : (best_score >= beta)           ? Bound::LOWER
+                                                           : Bound::EXACT;
+            if constexpr (!RootNode) {
+                if (best_move != Move::none() && best_score > original_alpha)
+                    update_stats(best_move, tt_move, depth, captured_searched, ss);
             }
-            if (best_move != Move::none() && best_score > original_alpha) {
-                update_stats(best_move, tt_move, depth, captured_searched, ss);
-            }
-            tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound);
+            tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
         }
+
         return best_score;
     }
 
@@ -388,49 +365,10 @@ namespace Engine {
         return false;
     }
     SearchResult Search::search(const int depth, SearchStack* ss) {
-        Score best_score = -Eval::INF;
-        Move best_move = Move::none();
-        Score alpha = -Eval::INF;
-        constexpr Score beta = Eval::INF;
-
-        ss->pv.clear();
-        auto moves = pos.legal_moves();
-        const int move_count = moves.size();
-#if DEBUG_STATS
-        stats.legal_moves += move_count;
-        stats.movegen_calls++;
-#endif
-
-        if (move_count > 0) {
-            best_move = moves[0]; // Legal move fallback
-        }
-
-        const auto tt_entry = tt[pos.zobrist_key()];
-        const Move tt_move = tt_entry ? tt_entry->best_move : Move::none();
-        MovePicker move_picker(pos,tt_move,depth,capture_history);
-        for (Move move = move_picker.next_move();move != Move::none();move = move_picker.next_move()) {
-            if (stop.load(std::memory_order_relaxed)) break;
-            if (!pos.legal(move)) {continue;}
-
-            pos.make_move(move);
-            Score score = -alpha_beta(-beta, -alpha, depth - 1, ss + 1);
-            pos.undo_move();
-
-            if (stop.load(std::memory_order_relaxed)) break;
-
-            if (score > best_score) {
-                best_score = score;
-                best_move = move;
-                if (score > alpha) {
-                    alpha = score;
-                    ss->pv.update(move, (ss + 1)->pv);
-                }
-            }
-        }
-        return { .move = best_move, .score = best_score };
+        const Score score = alpha_beta<NodeType::Root>(-Eval::INF, Eval::INF, depth, ss);
+        const Move move = ss->pv.empty() ? Move::none() : ss->pv[0];
+        return { .move = move, .score = score };
     }
-
-
     Move Search::find_best_move() {
 #if DEBUG_STATS
         stats.reset();

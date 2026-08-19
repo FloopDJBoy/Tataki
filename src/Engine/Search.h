@@ -77,6 +77,8 @@ namespace Engine {
     struct SearchStack {
         Score stat_score; //ranks the move played based on history
         PV pv;
+        bool ttPv;
+        Score staticEval;
     };
     class Search {
         constexpr static int SEARCHED_LIST_CAPACITY = 32;
