@@ -373,7 +373,7 @@ namespace ChessCore {
         }
         return false;
     }
-    bool Position::legal(Move move) const {
+    bool Position::legal(const Move move) const {
         const Square from = move.from();
         const Square to = move.to();
         //auto cb =  color_bb(~side_to_move());
@@ -395,7 +395,7 @@ namespace ChessCore {
         }
         return !(blockers_for_king(side_to_move()) & BitBoards::make_bitboard(from)) || (BitBoards::line_bb[from][to]) & piece_bb(PieceType::KING,side_to_move());
     }
-    inline const StateInfo& Position::push_state(Move move, Piece captured)
+    inline const StateInfo& Position::push_state(const Move move, const Piece captured)
     {
         StateInfo& st = history[ply_++];
         st = current_state_;
@@ -403,11 +403,12 @@ namespace ChessCore {
         st.captured = captured;
         return st;
     }
-    void Position::update_slider_blockers(Color c)
+    void Position::update_slider_blockers(const Color c)
     {
         blockers_for_king_[color_idx(c)] = 0;
+        pinners_[color_idx(~c)] = 0;
 
-        Square ksq = king_square(c);
+        const Square ksq = king_square(c);
 
         BitBoard sliders =
             (
@@ -418,17 +419,21 @@ namespace ChessCore {
                 (piece_bb(PieceType::BISHOP) | piece_bb(PieceType::QUEEN))
             ) & color_bb(~c);
 
-        BitBoard occupancy = all_bb() & ~sliders;
+        const BitBoard occupancy = all_bb() & ~sliders;
 
         while (sliders)
         {
-            Square s = BitBoards::pop_lsb(sliders);
+            const Square s = BitBoards::pop_lsb(sliders);
 
-            BitBoard blockers =
+            const BitBoard blockers =
                 BitBoards::line_between[ksq][s] & occupancy;
 
-            if (blockers && !BitBoards::more_than_one(blockers))
+            if (blockers && !BitBoards::more_than_one(blockers)) {
                 blockers_for_king_[color_idx(c)] |= blockers;
+                if (blockers & color_bb(c)) {
+                    pinners_[color_idx(~c)] |= s;
+                }
+            }
         }
     }
 
@@ -453,6 +458,144 @@ namespace ChessCore {
             |
             (BitBoards::get_attacks_bb<PieceType::KING>(s) & piece_bb(PieceType::KING));
     }
+
+    bool Position::see_ge(const Move move, const int threshold ) const {
+        using BitBoards::clear_square;
+        using BitBoards::toggle_square;
+        using BitBoards::get_attacks_bb;
+
+        //assume promo capture, ep passes
+        if (move.get_type() != MoveType::NORMAL) {
+            return 0>= threshold;
+        }
+
+        const Square from=move.from(),to = move.to();
+
+        int max_value = Eval::piece_value(square(move.to())) - threshold;
+        if (max_value < 0) {
+            return false;
+        }
+        max_value = Eval::piece_value(square(from)) - max_value;
+        //if the value of our piece is lower then theirs we always win. ie pawn takes queen
+        if (max_value <= 0) {
+            return true;
+        }
+
+        BitBoard occupancy = all_bb();
+        //do first capture
+        occupancy = clear_square(occupancy,from);
+        occupancy = clear_square(occupancy,to);
+
+        Color stm = side_to_move();
+        BitBoard attackers = attackers_to(to, occupancy);
+        int res = 1;
+
+        BitBoard dig = piece_bb(BISHOP) | piece_bb(QUEEN);
+        BitBoard ortho = piece_bb(ROOK) | piece_bb(QUEEN);
+
+
+        while (true) {
+            stm = ~stm;
+            attackers = attackers & occupancy;
+
+            BitBoard stm_attackers = attackers & color_bb(stm);
+            if (!stm_attackers) {
+                break;
+            }
+            if (pinners(~stm) & occupancy) {
+                stm_attackers &= ~blockers_for_king(stm); //remove all pinned
+                if (!stm_attackers) {
+                    break;
+                }
+            }
+            res ^= 1;
+            BitBoard bb;
+
+            // Pawn
+        if ((bb = stm_attackers & piece_bb(PAWN))) {
+            max_value = Eval::piece_value(PAWN) - max_value;
+
+            if (max_value < res)
+                break;
+
+            occupancy = clear_square(
+                occupancy,
+                BitBoards::lsb(bb)
+            );
+
+            // A pawn was removed, which can open a bishop/queen x-ray.
+            attackers |= get_attacks_bb<BISHOP>(to, occupancy) & dig;
+        }
+
+        // Knight
+        else if ((bb = stm_attackers & piece_bb(KNIGHT))) {
+            max_value = Eval::piece_value(KNIGHT) - max_value;
+
+            if (max_value < res)
+                break;
+
+            occupancy = clear_square(
+                occupancy,
+                BitBoards::lsb(bb)
+            );
+        }
+
+        // Bishop
+        else if ((bb = stm_attackers & piece_bb(BISHOP))) {
+            max_value = Eval::piece_value(BISHOP) - max_value;
+
+            if (max_value < res)
+                break;
+
+            occupancy = clear_square(
+                occupancy,
+                BitBoards::lsb(bb)
+            );
+
+            // Removing a bishop can reveal another bishop/queen.
+            attackers |= get_attacks_bb<BISHOP>(to, occupancy) & dig;
+        }
+
+        // Rook
+        else if ((bb = stm_attackers & piece_bb(ROOK))) {
+            max_value = Eval::piece_value(ROOK) - max_value;
+
+            if (max_value < res)
+                break;
+
+            occupancy = clear_square(occupancy,BitBoards::lsb(bb)
+            );
+
+            // Removing a rook can reveal another rook/queen.
+            attackers |= get_attacks_bb<ROOK>(to, occupancy) & ortho;
+        }
+
+        // Queen
+        else if ((bb = stm_attackers & piece_bb(QUEEN))) {
+            max_value = Eval::piece_value(QUEEN) - max_value;
+            if (max_value < res)
+                break;
+            occupancy = clear_square(occupancy,BitBoards::lsb(bb));
+
+            // Removing a queen can reveal either diagonal or orthogonal
+            // x-ray attackers.
+            attackers |=
+                (get_attacks_bb<BISHOP>(to, occupancy) & dig) |
+                (get_attacks_bb<ROOK>(to, occupancy) & ortho);
+        }
+
+        // King
+        else {
+            // If we "capture" with the king but the opponent still
+            // has attackers, reverse the result.
+            return (attackers & ~color_bb(stm)) ? static_cast<bool>(res ^ 1)
+                                                : static_cast<bool>(res);
+        }
+
+        }
+        return static_cast<bool>(res);
+    }
+
     bool Position::is_insufficient_material() const {
         if (std::popcount(all_bb()) > 4) {
             return false;
@@ -539,7 +682,7 @@ namespace ChessCore {
                 return Move::make<MoveType::EN_PASSANT>(from, to);
         }
 
-        return Move(from, to);
+        return {from, to};
     }
 
     Key Position::polyglot_hash() const {
@@ -637,6 +780,20 @@ namespace ChessCore {
             key ^= Zobrist::tables.side_to_move;
 
         return key;
+    }
+    //used to warm up the cache line
+    Key Position::prefetch_key(const Move move) const {
+        const Square from = move.from();
+        const Square to   = move.to();
+        const Piece moving   = square(from);
+        const Piece captured = square(to);
+
+        Key k = zobrist_key() ^ Engine::Zobrist::tables.side_to_move;
+        if (captured != Pieces::EMPTY)
+            k ^= Engine::Zobrist::piece_key(captured, to);
+        k ^= Engine::Zobrist::piece_key(moving, to);
+        k ^= Engine::Zobrist::piece_key(moving, from);
+        return k;
     }
 
 } // ChessCore

@@ -20,6 +20,7 @@ namespace Engine {
         bool enable_book_ = true;
         TranspositionTable tt;
         PawnTT pawn_tt;
+        History::CaptureHistory capture_history;
         std::unique_ptr<Search> searcher;
         std::jthread search_thread;
 
@@ -37,14 +38,24 @@ namespace Engine {
             const ChessCore::Position* pos = nullptr
         )
             : book(book_path),
-              position(pos ? *pos : ChessCore::FenHelper::STARTING_POSITION)
-        {}
+              position(pos ? *pos : ChessCore::FenHelper::STARTING_POSITION) {
+            for (auto& a : capture_history) {
+                for (auto& b : a) {
+                    b.fill({-742});
+                }
+            }
+        }
 
         ~Engine();
 
         void clear() {
             tt.clear();
             pawn_tt.clear();
+            for (auto& a : capture_history) {
+                for (auto& b : a) {
+                    b.fill({-742});
+                }
+            }
         }
         void set_book(const std::string& book_path){book = OpeningBook(book_path);}
         void enable_book(const bool enable) {enable_book_ = enable;}
@@ -59,6 +70,9 @@ namespace Engine {
         void wait_until_search_finished() const;
         bool is_finished() const;
         ChessCore::Move best_move() const;
+#if DEBUG_STATS
+        void print_stats() const {searcher->print_stats();}
+#endif
     };
 } // Engine
 

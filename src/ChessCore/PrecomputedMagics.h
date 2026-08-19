@@ -5,10 +5,11 @@
 #ifndef CHESSENGINE_PRECOMPUTEDMAGICS_H
 #define CHESSENGINE_PRECOMPUTEDMAGICS_H
 #include <array>
+#include "Types.h"
 namespace ChessCore::BitBoards::PrecomputedMagics {
     constexpr std::array rook_shifts = { 52, 52, 52, 52, 52, 52, 52, 52, 53, 53, 53, 54, 53, 53, 54, 53, 53, 54, 54, 54, 53, 53, 54, 53, 53, 54, 53, 53, 54, 54, 54, 53, 52, 54, 53, 53, 53, 53, 54, 53, 52, 53, 54, 54, 53, 53, 54, 53, 53, 54, 54, 54, 53, 53, 54, 53, 52, 53, 53, 53, 53, 53, 53, 52 };
     constexpr std::array bishop_shifts = { 58, 59, 59, 59, 59, 59, 59, 58, 59, 59, 59, 59, 59, 59, 59, 59, 59, 59, 57, 57, 57, 57, 59, 59, 59, 59, 57, 55, 55, 57, 59, 59, 59, 59, 57, 55, 55, 57, 59, 59, 59, 59, 57, 57, 57, 57, 59, 59, 59, 59, 59, 59, 59, 59, 59, 59, 58, 59, 59, 59, 59, 59, 59, 58 };
-    constexpr std::array rook_magic = {
+    constexpr std::array<BitBoard,64> rook_magic = {
         612498416294952992ULL,  2377936612260610304ULL,  36037730568766080ULL,
               72075188908654856ULL,   144119655536003584ULL,   5836666216720237568ULL,
               9403535813175676288ULL, 1765412295174865024ULL,  3476919663777054752ULL,
@@ -32,7 +33,7 @@ namespace ChessCore::BitBoards::PrecomputedMagics {
               4977040710267061250ULL, 10097633331715778562ULL, 325666550235288577ULL,
               1100057149646ULL,
     };
-    constexpr std::array bishop_magic = {
+    constexpr std::array<BitBoard,64> bishop_magic = {
         9368648609924554880ULL, 9009475591934976ULL,     4504776450605056ULL,
              1130334595844096ULL,    1725202480235520ULL,     288516396277699584ULL,
              613618303369805920ULL,  10168455467108368ULL,    9046920051966080ULL,

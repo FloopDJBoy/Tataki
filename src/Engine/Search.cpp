@@ -7,53 +7,25 @@
 #include <iostream>
 #include "Engine/TranspositionTable.h"
 #include "Eval.h"
+#include "MovePicker.h"
+
+
+
 namespace Engine {
     using namespace ChessCore;
     using Clock = std::chrono::steady_clock;
     using Duration = std::chrono::milliseconds;
     static auto start_time = Clock::now();
-    static int get_piece_value(PieceType pt) {
-        using namespace ChessCore;
-        switch(pt) {
-            case PieceType::PAWN:   return 1;
-            case PieceType::KNIGHT: return 2;
-            case PieceType::BISHOP: return 3;
-            case PieceType::ROOK:   return 4;
-            case PieceType::QUEEN:  return 5;
-            default: return 0; // King or Empty
-        }
-    }
-    static int score_move(const Position& pos, const Move move, const Move tt_move) {
-        // 1. Transposition Table / Hash Move
-        if (move == tt_move && tt_move != Move::none()) return 2000000;
-
-        const MoveType type = move.get_type();
-
-        // 2. Promotions
-        if (type == MoveType::PROMOTION) {
-            return 1000000 + get_piece_value(move.promotion_type()) * 10;
-        }
-
-        // 3. Captures (MVV-LVA)
-        Piece captured = pos.square(move.to());
-        if (captured != Pieces::EMPTY || type == MoveType::EN_PASSANT) {
-            PieceType victim = (type == MoveType::EN_PASSANT)
-                               ? PieceType::PAWN
-                               : Pieces::getType(captured);
-
-            PieceType attacker = Pieces::getType(pos.square(move.from()));
-
-            return 100000 + (get_piece_value(victim) * 10) - get_piece_value(attacker);
-        }
-
-        // 4. Quiet Moves
-        return 0;
-    }
-   template <bool in_check>
+    constexpr int QSEARCH_DEPTH = 0;
+    template <bool in_check>
     Score Search::quiesce(Score alpha, Score beta, SearchStack *ss) {
         assert(ss >= stack);
         assert(ss < stack + std::size(stack));
+#if DEBUG_STATS
+        ++stats.qnodes;
+#endif
         ss->pv.clear();
+        ss->stat_score=0;
 
         if ((++nodes & 1023) == 0 && should_stop()) {
             stop_search();
@@ -69,12 +41,56 @@ namespace Engine {
             return 0;
         }
         Score best_score;
-
+//        Move best_move = Move::none();
+//         const Key zobrist_key = pos.zobrist_key();
+//         const auto tt_entry = tt[zobrist_key];
+         constexpr  Move tt_move = Move::none();
+//         if (tt_entry) {
+//             const Score tt_score =TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
+//
+// #if DEBUG_STATS
+//             stats.tt_hits++;
+// #endif
+//
+//             // Always use TT move for move ordering, regardless of depth.
+//             if (tt_entry->best_move != Move::none()) {
+//                 tt_move = tt_entry->best_move;
+//             }
+//
+//             if (tt_entry->depth >= QSEARCH_DEPTH) {
+// #if DEBUG_STATS
+//                 stats.tt_depth_sufficient++;
+// #endif
+//
+//                 if (tt_entry->bound == (tt_score >= beta ? Bound::LOWER : Bound::UPPER))
+//                 {
+// #if DEBUG_STATS
+//                     stats.tt_cutoffs++;
+//                     if (tt_score >= beta)
+//                         stats.tt_lower_cutoffs++;
+//                     else
+//                         stats.tt_upper_cutoffs++;
+// #endif
+//
+//                     if (tt_move != Move::none()) {
+//                         ss->pv.update(tt_move);
+//                     }
+//
+//                     return tt_score;
+//                 }
+//             }
+//         }
         if constexpr (!in_check) {
             const Score stand_pat = Eval::evaluate(pos,&pawn_tt,alpha,beta);
+#if DEBUG_STATS
+            ++stats.eval_calls;
+#endif
 
-            if (stand_pat >= beta)
+
+            if (stand_pat >= beta) {
+                //tt.insert(zobrist_key,TranspositionTable::value_to_tt(stand_pat, pos.ply()),QSEARCH_DEPTH,Move::none(),Bound::LOWER);
                 return stand_pat;
+            }
 
             if (stand_pat > alpha)
                 alpha = stand_pat;
@@ -84,34 +100,12 @@ namespace Engine {
             best_score = -Eval::INF;
         }
 
-        auto moves = pos.generate_moves<in_check ? MoveGen::GenType::EVASIONS : MoveGen::GenType::CAPTURES>();
+        MovePicker move_picker(pos,tt_move,QSEARCH_DEPTH,capture_history);
 
-        if (moves.empty()) {
-            if constexpr (in_check)
-                return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
-
-            return best_score;
-        }
-
-        const int move_count = moves.size();
-        int scores[256];
         bool found_move = false;
 
-        for (int i = 0; i < move_count; ++i) {
-            scores[i] = score_move(pos, moves[i], Move::none());
-        }
+        for (Move move = move_picker.next_move();move != Move::none();move = move_picker.next_move()) {
 
-        for (int i = 0; i < move_count; ++i) {
-            int best_idx = i;
-            for (int j = i + 1; j < move_count; ++j) {
-                if (scores[j] > scores[best_idx]) {
-                    best_idx = j;
-                }
-            }
-            std::swap(scores[i], scores[best_idx]);
-            std::swap(moves[i], moves[best_idx]);
-
-            const Move move = moves[i];
             if (pos.legal(move)) {
                 found_move = true;
                 pos.make_move(move);
@@ -127,6 +121,7 @@ namespace Engine {
 
                 if (score > best_score) {
                     best_score = score;
+                    //best_move = move;
 
                     if (score > alpha) {
                         alpha = score;
@@ -139,18 +134,47 @@ namespace Engine {
                 }
             }
         }
-
         if constexpr (in_check) {
             if (!found_move) {
                 return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
             }
         }
-
+        // if (!stop.load(std::memory_order_relaxed)) {
+        //     const Bound bound = best_score >= beta ? Bound::LOWER : Bound::UPPER;
+        //     //tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), QSEARCH_DEPTH, best_move, bound);
+        // }
         return best_score;
     }
 
-    Score Search::alpha_beta(Score alpha, const Score beta, const int depth, SearchStack* ss) {
+   void Search::update_stats(const Move best_move, const Move tt_move, const int depth,const DumbVector<Move,SEARCHED_LIST_CAPACITY> &captures_searched ,const SearchStack* ss) {
+        //stockfish magic numbers I have no idea how to name them
+        assert((ss-1)>=stack);
+        //const int prior_stat_score = ss > stack ? (ss - 1)->stat_score : 0;
+        const int bonus = std::min(133 * depth - 81, 1487) + 364 * (best_move == tt_move) + (ss-1)->stat_score;
+        const int malus = std::min(968 * depth - 235, 2244);
+
+
+        if (pos.is_capture(best_move)) {
+            const auto moved = pos.square(best_move.from());
+            const auto captured_type = best_move.get_type() == MoveType::EN_PASSANT ?
+                                   PieceType::PAWN :
+                                   Pieces::getType(pos.square(best_move.to()));
+            capture_history[moved][best_move.to()][static_cast<int>(captured_type)].add(bonus * 1427 / 1024); //more stockfish magic numbers
+        }
+        for (Move move : captures_searched) {
+            const auto moved = pos.square(move.from());
+            const auto captured_type = move.get_type() == MoveType::EN_PASSANT ?
+                                       PieceType::PAWN :
+                                       Pieces::getType(pos.square(move.to()));
+            capture_history[moved][move.to()][static_cast<int>(captured_type)].add(-malus* 1489 / 1024);//even more stockfish magic numbers
+        }
+
+   }
+   template<NodeType node_type>
+   Score Search::alpha_beta(Score alpha, const Score beta, const int depth, SearchStack* ss) {
+        constexpr bool pv_node = node_type != NodeType::NonPV;
         ss->pv.clear();
+        ss->stat_score=0;
         if ((++nodes & 1023) == 0 && should_stop()) {
             stop_search();
         }
@@ -169,21 +193,35 @@ namespace Engine {
             return pos.in_check() ? quiesce<true>(alpha, beta, ss) : quiesce<false>(alpha, beta, ss);
         }
 
+        DumbVector<Move,SEARCHED_LIST_CAPACITY> captured_searched;
         const Key zobrist_key = pos.zobrist_key();
         const Engine::TTEntry* tt_entry = tt[zobrist_key];
+#if DEBUG_STATS
+        ++stats.tt_probes;
+#endif
         Move tt_move = Move::none();
         const Score original_alpha = alpha;
 
         if (tt_entry) {
+#if DEBUG_STATS
+            stats.tt_hits++;
+#endif
             // Extract TT move regardless of depth for move ordering
             if (tt_entry->best_move != ChessCore::Move::none()) {
                 tt_move = tt_entry->best_move;
             }
 
             if (tt_entry->depth >= depth) {
+#if DEBUG_STATS
+                stats.tt_depth_sufficient++;
+#endif
                 const Score tt_score = TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
-                switch (tt_entry->bound) {
+                switch (tt_entry->bound()) {
                     case Bound::EXACT:
+#if DEBUG_STATS
+                        stats.tt_cutoffs++;
+                        stats.tt_exact_cutoffs++;
+#endif
                         if (tt_move != Move::none()) {
                             ss->pv.update(tt_move);
                         }
@@ -191,6 +229,10 @@ namespace Engine {
 
                     case Bound::LOWER:
                         if (tt_score >= beta) {
+#if DEBUG_STATS
+                            stats.tt_cutoffs++;
+                            stats.tt_lower_cutoffs++;
+#endif
                             if (tt_move != Move::none()) {
                                 ss->pv.update(tt_move);
                             }
@@ -199,8 +241,13 @@ namespace Engine {
                         break;
 
                     case Bound::UPPER:
-                        if (tt_score <= alpha)
+                        if (tt_score <= alpha) {
+#if DEBUG_STATS
+                            stats.tt_cutoffs++;
+                            stats.tt_upper_cutoffs++;
+#endif
                             return tt_score;
+                        }
                         break;
                 }
             }
@@ -209,37 +256,48 @@ namespace Engine {
         Score best_score = -Eval::INF;
         Move best_move = Move::none();
         bool found_move = false;
-
-        auto moves = pos.legal_moves();
-        const int move_count = moves.size();
-        std::array<int, 256> scores{};
-
-        for (int i = 0; i < move_count; ++i) {
-            scores[i] = score_move(pos, moves[i], tt_move);
-        }
-
-        for (int i = 0; i < move_count; ++i) {
-            int best_idx = i;
-            for (int j = i + 1; j < move_count; ++j) {
-                if (scores[j] > scores[best_idx]) {
-                    best_idx = j;
-                }
+        MovePicker move_picker(pos,tt_move,depth,capture_history);
+        int i=0;
+        for (Move move = move_picker.next_move();move != Move::none();move = move_picker.next_move()) {
+            if (!pos.legal(move)) {
+                continue;
             }
-
-            std::swap(scores[i], scores[best_idx]);
-            std::swap(moves[i], moves[best_idx]);
-
-            const Move move = moves[i];
+            ++i;
             found_move = true;
-
+            const bool capture = pos.is_capture(move);
+            const Piece moved_piece = pos.square(move.from());
+            tt.prefetch(pos.prefetch_key(move));
             pos.make_move(move);
-            const auto score = static_cast<Score>(-alpha_beta(-beta, -alpha, depth - 1, ss + 1));
+            if (capture) {
+                const int captured_type =static_cast<int>(Pieces::getType(pos.state().captured));
+                const auto captured_value = Eval::piece_value(pos.state().captured);
+                ss->stat_score =History::capture_stat_victim_value(captured_value) + capture_history[moved_piece][move.to()][captured_type]; ////NOLINT
+            }
+            Score score;
+            if constexpr (pv_node) {
+                if (i == 0) {
+                    score = -alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1);
+                } else {
+                    score = -alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, depth - 1, ss + 1); // null window
+                    if (score > alpha && score < beta) {
+                        score = -alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1); // re-search
+                    }
+                }
+            }else {
+                score = -alpha_beta<NodeType::NonPV>(-beta, -alpha, depth - 1, ss + 1);
+            }
             pos.undo_move();
 
             if (stop.load(std::memory_order_relaxed)) {
                 return 0;
             }
+#if DEBUG_STATS
+            if (best_score<= original_alpha) {
+                stats.fail_low++;
+            }
+#endif
 
+            const int old_alpha = alpha;
             if (score > best_score) {
                 best_score = score;
                 best_move = move;
@@ -249,8 +307,16 @@ namespace Engine {
                     ss->pv.update(move, (ss + 1)->pv);
                 }
             }
-
+            if (capture) {
+                if (alpha <= old_alpha &&  i <= SEARCHED_LIST_CAPACITY) {
+                    captured_searched.push_back(move); //add it to get malus later
+                }
+            }
             if (alpha >= beta) {
+#if DEBUG_STATS
+                stats.beta_cutoffs++;
+                stats.fail_high++;
+#endif
                 break;
             }
         }
@@ -266,11 +332,15 @@ namespace Engine {
             Bound bound;
             if (best_score <= original_alpha)
                 bound = Bound::UPPER;
-            else if (best_score >= beta)
-                bound = Bound::LOWER;
-            else
-                bound = Bound::EXACT;
-
+            else {
+                if (best_score >= beta)
+                    bound = Bound::LOWER;
+                else
+                    bound = Bound::EXACT;
+            }
+            if (best_move != Move::none() && best_score > original_alpha) {
+                update_stats(best_move, tt_move, depth, captured_searched, ss);
+            }
             tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound);
         }
         return best_score;
@@ -326,6 +396,10 @@ namespace Engine {
         ss->pv.clear();
         auto moves = pos.legal_moves();
         const int move_count = moves.size();
+#if DEBUG_STATS
+        stats.legal_moves += move_count;
+        stats.movegen_calls++;
+#endif
 
         if (move_count > 0) {
             best_move = moves[0]; // Legal move fallback
@@ -333,25 +407,11 @@ namespace Engine {
 
         const auto tt_entry = tt[pos.zobrist_key()];
         const Move tt_move = tt_entry ? tt_entry->best_move : Move::none();
-
-        std::array<int, 256> scores{};
-        for (int i = 0; i < move_count; ++i) {
-            scores[i] = score_move(pos, moves[i], tt_move);
-        }
-
-        for (int i = 0; i < move_count; ++i) {
+        MovePicker move_picker(pos,tt_move,depth,capture_history);
+        for (Move move = move_picker.next_move();move != Move::none();move = move_picker.next_move()) {
             if (stop.load(std::memory_order_relaxed)) break;
+            if (!pos.legal(move)) {continue;}
 
-            int best_idx = i;
-            for (int j = i + 1; j < move_count; ++j) {
-                if (scores[j] > scores[best_idx]) {
-                    best_idx = j;
-                }
-            }
-            std::swap(scores[i], scores[best_idx]);
-            std::swap(moves[i], moves[best_idx]);
-
-            const Move move = moves[i];
             pos.make_move(move);
             Score score = -alpha_beta(-beta, -alpha, depth - 1, ss + 1);
             pos.undo_move();
@@ -372,11 +432,18 @@ namespace Engine {
 
 
     Move Search::find_best_move() {
+#if DEBUG_STATS
+        stats.reset();
+#endif
         nodes = 0;
         Move best_move = Move::none();
 
         // Fallback to first legal move to prevent returning Move::none() on instant stops
         auto root_moves = pos.legal_moves();
+#if DEBUG_STATS
+        stats.legal_moves += root_moves.size();
+        stats.movegen_calls++;
+#endif
         if (!root_moves.empty()) {
             best_move = root_moves[0];
         }
@@ -390,14 +457,13 @@ namespace Engine {
             : Clock::now() + duration_limit;
 
         for (int depth = 1; ; ++depth) {
-            // FIX: Check time before starting a new depth
             if (should_stop()) {
                 stop_search();
                 break;
             }
 
             SearchStack* ss = stack;
-
+            assert(ss->stat_score == 0);
             const auto [move, score] = search(depth, ss);
             const auto elapsed = std::chrono::duration_cast<Duration>(Clock::now() - start_time);
 
@@ -411,7 +477,9 @@ namespace Engine {
             if (move != Move::none()) {
                 best_move = move;
             }
-
+#if DEBUG_STATS
+            stats.nodes += nodes;
+#endif
             std::cout << "info depth " << depth;
 
             if (score > Eval::MATE_THRESHOLD) {
@@ -437,11 +505,95 @@ namespace Engine {
                 return best_move;
             }
         }
-        std::cerr << "return STOP: "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                     Clock::now() - start_time
-                 ).count()
-              << " ms\n";
+#if DEBUG_STATS
+        stats.nodes = nodes;
+#endif
         return best_move;
     }
+#if DEBUG_STATS
+    void Search::print_stats() const {
+    const auto pct = [](const uint64_t numerator, const uint64_t denominator) -> double {
+        if (denominator == 0) {
+            return 0.0;
+        }
+        return 100.0 * static_cast<double>(numerator)
+             / static_cast<double>(denominator);
+    };
+
+    std::cerr << "\n";
+    std::cerr << "========== SEARCH STATS ==========\n";
+
+    // Nodes
+    std::cerr << "Nodes\n";
+    std::cerr << "  nodes:              " << stats.nodes << '\n';
+    std::cerr << "  qnodes:             " << stats.qnodes << '\n';
+    std::cerr << "  total:              "
+              << stats.nodes + stats.qnodes << '\n';
+
+    if (stats.nodes + stats.qnodes > 0) {
+        std::cerr << "  qnode %:            "
+                  << std::fixed << std::setprecision(1)
+                  << pct(stats.qnodes, stats.nodes + stats.qnodes)
+                  << "%\n";
+    }
+
+    // TT
+    std::cerr << "\nTransposition Table\n";
+    std::cerr << "  probes:             " << stats.tt_probes << '\n';
+    std::cerr << "  hits:               " << stats.tt_hits
+              << " (" << std::fixed << std::setprecision(1)
+              << pct(stats.tt_hits, stats.tt_probes) << "%)\n";
+
+    std::cerr << "  depth sufficient:   " << stats.tt_depth_sufficient
+              << " (" << std::fixed << std::setprecision(1)
+              << pct(stats.tt_depth_sufficient, stats.tt_hits) << "% of hits)\n";
+
+    std::cerr << "  cutoffs:            " << stats.tt_cutoffs
+              << " (" << std::fixed << std::setprecision(1)
+              << pct(stats.tt_cutoffs, stats.tt_probes) << "% of probes)\n";
+
+    std::cerr << "    exact:            " << stats.tt_exact_cutoffs << '\n';
+    std::cerr << "    lower:            " << stats.tt_lower_cutoffs << '\n';
+    std::cerr << "    upper:            " << stats.tt_upper_cutoffs << '\n';
+
+    // Search
+    std::cerr << "\nSearch\n";
+    std::cerr << "  beta cutoffs:       " << stats.beta_cutoffs << '\n';
+
+    std::cerr << "  fail high:          " << stats.fail_high << '\n';
+    std::cerr << "  fail low:           " << stats.fail_low << '\n';
+
+    // Evaluation
+    std::cerr << "\nEvaluation\n";
+    std::cerr << "  eval calls:         " << stats.eval_calls << '\n';
+
+    // Move generation
+    std::cerr << "\nMove Generation\n";
+    std::cerr << "  calls:              " << stats.movegen_calls << '\n';
+    std::cerr << "  legal moves:        " << stats.legal_moves << '\n';
+
+    if (stats.movegen_calls > 0) {
+        std::cerr << "  avg moves/call:     "
+                  << std::fixed << std::setprecision(2)
+                  << static_cast<double>(stats.legal_moves)
+                     / stats.movegen_calls
+                  << '\n';
+    }
+
+    std::cerr << "\nQMove Generation\n";
+    std::cerr << "  calls:              " << stats.qmovegen_calls << '\n';
+    std::cerr << "  moves generated:    " << stats.qmoves_generated << '\n';
+
+    if (stats.qmovegen_calls > 0) {
+        std::cerr << "  avg moves/call:     "
+                  << std::fixed << std::setprecision(2)
+                  << static_cast<double>(stats.qmoves_generated)
+                     / stats.qmovegen_calls
+                  << '\n';
+    }
+
+    std::cerr << "==================================\n";
+}
+#endif
+
 } // Engine

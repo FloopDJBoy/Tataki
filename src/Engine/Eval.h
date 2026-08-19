@@ -29,6 +29,7 @@ namespace Engine::Eval {
         4 * ROOK_PHASE +
         2 * QUEEN_PHASE;
 
+
     constexpr ScorePair mobility_bonus[4][28] = {
         // [0] KNIGHT (9 active elements: 0..8)
         {
@@ -247,6 +248,15 @@ namespace Engine::Eval {
         }
     }}
 };
+    constexpr std::array Capture_Piece_Value = {
+        0,      // none
+        208,     // pawn
+        781,    // knight
+        825,    // bishop
+        1276,    // rook
+        2538,    // queen
+        0   // king
+    };
     constexpr Score INF = 32000;
     constexpr Score MATE_SCORE = 30000;
     constexpr Score NEG_INF = -INF;
@@ -276,6 +286,13 @@ namespace Engine::Eval {
     Score evaluate(const ChessCore::Position& pos,PawnTT* pawn_tt,Score alpha,Score beta);
     inline ScorePair evaluate_piece(const Piece piece, const Square s){
         return PSQT[piece][s];
+    }
+
+    constexpr Value piece_value(const PieceType piece) {
+        return Capture_Piece_Value[static_cast<int>(piece)];
+    }
+    constexpr Value piece_value(const Piece piece) {
+        return piece_value(ChessCore::Pieces::getType(piece));
     }
     Value pst_value(Piece piece,Square s,bool eg);
     Value material_value(PieceType p,bool eg);

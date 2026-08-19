@@ -4,8 +4,8 @@
 
 #pragma once
 #include <array>
+#include <cassert>
 #include <cstdint>
-#include <tuple>
 
 enum class PieceType : uint8_t {
     EMPTY = 0,
@@ -99,6 +99,13 @@ using Key = uint64_t;
 using Score = int16_t;
 using Value = uint32_t;
 
+constexpr int COLOR_NUMBER = 2;
+constexpr int SQUARE_NUMBER = 64;
+constexpr int PIECE_NUMBER = 15; //such that you can do arr[piece]
+constexpr int PT_NUMBER = 7; //including empty
+
+
+
 constexpr Square NO_SQUARE = 255;
 enum SquareName : Square {
     a1,b1,c1,d1,e1,f1,g1,h1,
@@ -128,6 +135,22 @@ struct ScorePair {
 
     ScorePair operator*(const Score mult) const {return { static_cast<Score>(mg * mult), static_cast<Score>(eg * mult)};};
 };
+template<typename T,size_t MaxSize>
+class DumbVector {
+    T     values_[MaxSize];
+    size_t size_ = 0;
+    public:
+    [[nodiscard]] size_t size() const { return size_; }
+    [[nodiscard]] int   ssize() const { return static_cast<int>(size_); }
+    void  push_back(const T& value) {
+        assert(size_ < MaxSize);
+        values_[size_++] = value;
+    }
+    const T* begin() const { return values_; }
+    const T* end() const { return values_ + size_; }
+    const T& operator[](int index) const { return values_[index]; }
+};
+
 constexpr bool is_valid_square(const Square s) {
     return s<64;
 }

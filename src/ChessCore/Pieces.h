@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "../Types.h"
+#include "Types.h"
 namespace ChessCore::Pieces {
     //Piece representation
     //last 3 bits represents the type

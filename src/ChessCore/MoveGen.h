@@ -28,11 +28,9 @@ namespace ChessCore::MoveGen {
     Move* generate(const Position& pos,Move* moveList);
     template<GenType genType>
     struct MoveList {
-        private:
+
+    public:
         constexpr static int MAX_MOVES = 256;
-        Move moveList[MAX_MOVES];
-        Move* last;
-        public:
         [[nodiscard]] const Move* begin() const {return moveList;}
         [[nodiscard]] const Move* end() const {return last;}
         [[nodiscard]] Move* begin() {return moveList;}
@@ -45,6 +43,9 @@ namespace ChessCore::MoveGen {
         [[nodiscard]] bool empty() const {return last == moveList;}
         MoveList(const MoveList&) = delete;
         MoveList& operator=(const MoveList&) = delete;
+    private:
+        Move moveList[MAX_MOVES];
+        Move* last;
 
     };
 

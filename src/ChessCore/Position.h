@@ -36,6 +36,7 @@ namespace ChessCore {
         int16_t ply_;
         int16_t root_ply_ = 0; // ply_ value when this copy was handed to Search
         int32_t fullmove_number_;
+        std::array<BitBoard,2> pinners_ = {0,0};
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
         public:
@@ -88,6 +89,7 @@ namespace ChessCore {
         [[nodiscard]] Move parse_move(const std::string & move_string) const;
         [[nodiscard]] Move parse_move(Square from, Square to, PieceType promo) const;
         [[nodiscard]] BitBoard attackers_to(Square s , BitBoard occupancy) const;
+        [[nodiscard]] bool see_ge(Move move,int threshold = 0) const;
         [[nodiscard]] Key polyglot_hash() const;
         [[nodiscard]] auto legal_moves() const {return MoveGen::MoveList<MoveGen::GenType::LEGAL>(*this);}
         [[nodiscard]] auto quiescence_moves() const {return MoveGen::MoveList<MoveGen::GenType::CAPTURES>(*this);} //moves are pseudo_legal
@@ -99,7 +101,20 @@ namespace ChessCore {
         [[nodiscard]] Key pawn_key() const {return state().pawn_key;}
         [[nodiscard]] bool is_3fold() const {return state().repetition >= 1;}
         [[nodiscard]] bool is_insufficient_material() const;
+        [[nodiscard]] BitBoard pinners(const Color c) const {return pinners_[color_idx(c)];}
+        [[nodiscard]] Key prefetch_key(Move move) const;
         [[nodiscard]] bool is_draw() const {return is_3fold() || state().half_clock>=100 || is_insufficient_material();}
+        [[nodiscard]] bool is_capture(const Move move) const {
+            const MoveType mt = move.get_type();
+            if (mt == MoveType::NORMAL) {
+                return square(move.to()) != Pieces::EMPTY ;
+            }
+            //all queen promo is a capture
+            if (mt == MoveType::PROMOTION) {
+                return square(move.to()) != Pieces::EMPTY || move.promotion_type() == PieceType::QUEEN;
+            }
+            return mt == MoveType::EN_PASSANT;
+        }
 #ifndef NDEBUG
         void verify_zobrist() const {
             assert(current_state_.zobrist_key == zobrist_key(true));

@@ -30,6 +30,7 @@ namespace Engine::Eval {
             ScorePair(10, 16), ScorePair(20, 32), ScorePair(30, 48), ScorePair( 0,  0)
         };
     }
+
     static constexpr Square mirror(const Square s) {
         return s ^ 56;
     }

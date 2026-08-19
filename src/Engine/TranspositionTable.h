@@ -11,13 +11,20 @@
 
 namespace Engine {
     struct alignas(16) TTEntry {
-        Key key{0};                   // 8 bytes (offset 0)
-        Score score{0};               // 2 bytes (offset 8)
-        int16_t depth{0};             // 2 bytes (offset 10)
-        ChessCore::Move best_move{};  // 2 bytes (offset 12)
-        Bound bound{Bound::EXACT};    // 1 byte  (offset 14)
-        uint8_t age{0};               // 1 byte  (offset 15)
-    };                                // Total: 16 bytes
+        Key key{0};                     // 8 bytes (offset 0)
+        Score score{0};                 // 2 bytes (offset 8)
+        int16_t depth{0};               // 2 bytes (offset 10)
+        ChessCore::Move best_move{};    // 2 bytes (offset 12)
+        uint8_t bound_pv{0};            // 1 byte  (offset 14) -- bits[0:1]=Bound, bit[2]=is_pv
+        uint8_t age{0};                 // 1 byte  (offset 15)
+
+        [[nodiscard]] Bound bound() const noexcept { return static_cast<Bound>(bound_pv & 0x3); }
+        [[nodiscard]] bool  is_pv() const noexcept { return (bound_pv & 0x4) != 0; }
+
+        static constexpr uint8_t pack(const Bound b, const bool pv) noexcept {
+            return static_cast<uint8_t>(static_cast<uint8_t>(b) | (static_cast<uint8_t>(pv) << 2));
+        }
+    };
     static_assert(sizeof(TTEntry) == 16);
     class TranspositionTable {
         size_t NUM_BUCKETS;
@@ -35,13 +42,14 @@ namespace Engine {
 
         std::unique_ptr<TTEntry[]> tt;
         uint8_t generation = 0;
+
         public:
         [[nodiscard]] int replacement_score(const TTEntry& e) const;
         explicit TranspositionTable(size_t megabytes);
         TranspositionTable() : TranspositionTable(128) {}
-        TTEntry* operator [](Key key) {
+        [[nodiscard]] inline TTEntry* operator [](const Key key) noexcept{
             TTEntry* bucket = &tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE];
-
+            #pragma unroll
             for (int i = 0; i < BUCKET_SIZE; ++i) {
                 if (bucket[i].key == key)
                     return &bucket[i];
@@ -79,6 +87,9 @@ namespace Engine {
                 0,
                 NUM_BUCKETS * BUCKET_SIZE * sizeof(TTEntry)
             );
+        }
+        void prefetch(const Key key) const{
+            __builtin_prefetch(&tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE]);
         }
     };
 } // Engine
