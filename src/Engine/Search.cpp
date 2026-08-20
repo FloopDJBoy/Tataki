@@ -387,7 +387,7 @@ namespace Engine {
         const int time_ms = (pos.side_to_move() == Color::WHITE) ? limits.wtime_ms : limits.btime_ms;
         if (time_ms == 0) return Duration::max();
 
-        constexpr int HARD_LIMIT_MULTIPLIER = 4; // placeholder
+        constexpr int HARD_LIMIT_MULTIPLIER = 2; // placeholder
         const auto soft = calculate_soft_limit();
         if (soft == Duration::max()) return soft;
 
@@ -438,7 +438,7 @@ namespace Engine {
 
         constexpr std::array STABILITY_SCALE = {1.30, 1.15, 1.00, 0.90, 0.80}; // placeholder table, indexed by min(stability,4)
 
-        for (int depth = 1; ; ++depth) {
+        for (int depth = 1;depth<PV::MAX_PLY; ++depth) {
             if (should_stop()) {
                 stop_search();
                 break;
@@ -492,99 +492,13 @@ namespace Engine {
                 return best_move;
             }
             if (soft_limit != Duration::max()) {
-                const auto scaled = Duration{ int64_t(soft_limit.count() * STABILITY_SCALE[stability]) };
+                const auto scaled = Duration{ static_cast<int64_t>(soft_limit.count() * STABILITY_SCALE[stability]) };
                 if (elapsed >= scaled) return best_move;
             }
         }
-#if DEBUG_STATS
-        stats.nodes = nodes;
-#endif
+
         return best_move;
     }
-#if DEBUG_STATS
-    void Search::print_stats() const {
-    const auto pct = [](const uint64_t numerator, const uint64_t denominator) -> double {
-        if (denominator == 0) {
-            return 0.0;
-        }
-        return 100.0 * static_cast<double>(numerator)
-             / static_cast<double>(denominator);
-    };
 
-    std::cerr << "\n";
-    std::cerr << "========== SEARCH STATS ==========\n";
-
-    // Nodes
-    std::cerr << "Nodes\n";
-    std::cerr << "  nodes:              " << stats.nodes << '\n';
-    std::cerr << "  qnodes:             " << stats.qnodes << '\n';
-    std::cerr << "  total:              "
-              << stats.nodes + stats.qnodes << '\n';
-
-    if (stats.nodes + stats.qnodes > 0) {
-        std::cerr << "  qnode %:            "
-                  << std::fixed << std::setprecision(1)
-                  << pct(stats.qnodes, stats.nodes + stats.qnodes)
-                  << "%\n";
-    }
-
-    // TT
-    std::cerr << "\nTransposition Table\n";
-    std::cerr << "  probes:             " << stats.tt_probes << '\n';
-    std::cerr << "  hits:               " << stats.tt_hits
-              << " (" << std::fixed << std::setprecision(1)
-              << pct(stats.tt_hits, stats.tt_probes) << "%)\n";
-
-    std::cerr << "  depth sufficient:   " << stats.tt_depth_sufficient
-              << " (" << std::fixed << std::setprecision(1)
-              << pct(stats.tt_depth_sufficient, stats.tt_hits) << "% of hits)\n";
-
-    std::cerr << "  cutoffs:            " << stats.tt_cutoffs
-              << " (" << std::fixed << std::setprecision(1)
-              << pct(stats.tt_cutoffs, stats.tt_probes) << "% of probes)\n";
-
-    std::cerr << "    exact:            " << stats.tt_exact_cutoffs << '\n';
-    std::cerr << "    lower:            " << stats.tt_lower_cutoffs << '\n';
-    std::cerr << "    upper:            " << stats.tt_upper_cutoffs << '\n';
-
-    // Search
-    std::cerr << "\nSearch\n";
-    std::cerr << "  beta cutoffs:       " << stats.beta_cutoffs << '\n';
-
-    std::cerr << "  fail high:          " << stats.fail_high << '\n';
-    std::cerr << "  fail low:           " << stats.fail_low << '\n';
-
-    // Evaluation
-    std::cerr << "\nEvaluation\n";
-    std::cerr << "  eval calls:         " << stats.eval_calls << '\n';
-
-    // Move generation
-    std::cerr << "\nMove Generation\n";
-    std::cerr << "  calls:              " << stats.movegen_calls << '\n';
-    std::cerr << "  legal moves:        " << stats.legal_moves << '\n';
-
-    if (stats.movegen_calls > 0) {
-        std::cerr << "  avg moves/call:     "
-                  << std::fixed << std::setprecision(2)
-                  << static_cast<double>(stats.legal_moves)
-                     / stats.movegen_calls
-                  << '\n';
-    }
-
-    std::cerr << "\nQMove Generation\n";
-    std::cerr << "  calls:              " << stats.qmovegen_calls << '\n';
-    std::cerr << "  moves generated:    " << stats.qmoves_generated << '\n';
-
-    if (stats.qmovegen_calls > 0) {
-        std::cerr << "  avg moves/call:     "
-                  << std::fixed << std::setprecision(2)
-                  << static_cast<double>(stats.qmoves_generated)
-                     / stats.qmovegen_calls
-                  << '\n';
-    }
-
-    std::cerr << "==================================\n";
-}
-#endif
 
 } // Engine
