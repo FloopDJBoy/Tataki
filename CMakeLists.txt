@@ -21,7 +21,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #src/Gui/Board.h
 #resources.qrc
 set(ENGINE_NAME "Sashimi")
-set(ENGINE_VERSION "v0.6.0")
+set(ENGINE_VERSION "v0.8.0")
 
 add_executable(chessEngine
         src/main.cpp

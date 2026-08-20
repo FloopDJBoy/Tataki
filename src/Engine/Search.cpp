@@ -146,7 +146,7 @@ namespace Engine {
         return best_score;
     }
 
-   void Search::update_stats(const Move best_move, const Move tt_move, const int depth,const DumbVector<Move,SEARCHED_LIST_CAPACITY> &captures_searched ,const SearchStack* ss) {
+   void Search::update_stats(const Move best_move, const Move tt_move, const int depth,const DumbVector<Move,SEARCHED_LIST_CAPACITY> &captures_searched ,const SearchStack* ss,const bool PVNode) {
         //stockfish magic numbers I have no idea how to name them
         assert((ss-1)>=stack);
         //const int prior_stat_score = ss > stack ? (ss - 1)->stat_score : 0;
@@ -222,27 +222,56 @@ namespace Engine {
             }
         }
 
-        constexpr int   RFP_MAX_DEPTH           = 8;   // free parameter, tune via SPRT
+        constexpr int   RFP_MAX_DEPTH           = 8;   // free parameter
         constexpr Score RFP_MARGIN_PER_DEPTH    = 80;  // free parameter
         constexpr Score RFP_IMPROVING_REDUCTION = 60;  // free parameter
 
-        ss->staticEval = pos.in_check()
-            ? (pos.ply() >= 2 ? (ss - 2)->staticEval : 0)
-            : Eval::evaluate(pos);
 
+
+        ss->static_eval = pos.in_check()
+            ? (pos.ply() >= 2 ? (ss - 2)->static_eval : 0)
+            : Eval::evaluate(pos);
+        const bool improving = pos.ply() >= 2 && ss->static_eval > (ss - 2)->static_eval;
+        //RFP
         if (!pos.in_check()
             && depth <= RFP_MAX_DEPTH
             && (tt_move == Move::none() || pos.is_capture(tt_move))
-            && beta > -Eval::MATE_THRESHOLD          // beta isn't already a "we're getting mated" bound
-            && ss->staticEval < Eval::MATE_THRESHOLD // eval isn't already a near-mate winning score
+            && beta > -Eval::MATE_THRESHOLD          // beta isn't already a near-mate loosing score
+            && ss->static_eval < Eval::MATE_THRESHOLD // eval isn't already a near-mate winning score
         ) {
-            const bool improving = pos.ply() >= 2 && ss->staticEval > (ss - 2)->staticEval;
+
 
             Score margin = RFP_MARGIN_PER_DEPTH * depth;
             if (improving) margin -= RFP_IMPROVING_REDUCTION;
 
-            if (ss->staticEval - margin >= beta)
-                return ss->staticEval; // fail-soft; the (eval+beta)/2-style tweaks are a later tuning knob
+            if (ss->static_eval - margin >= beta)
+                return ss->static_eval; // fail-soft; the (eval+beta)/2-style tweaks are a later tuning knob
+        }
+
+        if constexpr (!PvNode) {
+            constexpr int   NMP_MIN_DEPTH           = 3;
+            constexpr Score NMP_BASE_MARGIN         = 150;  // flat, dominant term
+            constexpr Score NMP_MARGIN_PER_DEPTH    = 10;
+            constexpr Score NMP_IMPROVING_REDUCTION = 25;
+            constexpr int   R                       = 3;
+
+            if (!pos.in_check()
+                && depth >= NMP_MIN_DEPTH
+                && pos.previous().move != Move::null()
+                && beta > -Eval::MATE_THRESHOLD
+                && ss->static_eval < Eval::MATE_THRESHOLD
+                && ss->static_eval >= beta //- NMP_MARGIN_PER_DEPTH * depth - NMP_IMPROVING_REDUCTION * improving +NMP_BASE_MARGIN
+                && pos.non_pawn_material(pos.side_to_move())) {
+
+                pos.make_null_move();
+                const auto null_value = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-beta, -beta + 1, depth - 1 - R, ss + 1));
+                pos.undo_null_move();
+
+                if (stop.load(std::memory_order_relaxed)) return 0;
+
+                if (null_value >= beta)
+                    return null_value < Eval::MATE_THRESHOLD ? null_value : beta;
+                }
         }
 
         Score best_score = -Eval::INF;
@@ -315,7 +344,7 @@ namespace Engine {
                                                            : Bound::EXACT;
             if constexpr (!RootNode) {
                 if (best_move != Move::none() && best_score > original_alpha)
-                    update_stats(best_move, tt_move, depth, captured_searched, ss);
+                    update_stats(best_move, tt_move, depth, captured_searched, ss,PvNode);
             }
             tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
         }
@@ -323,7 +352,7 @@ namespace Engine {
         return best_score;
     }
 
-    Duration Search::calculate_time_limit() const {
+    Duration Search::calculate_soft_limit() const {
         if (limits.movetime_ms > 0) {
             // Deduct a scaled margin up to 50ms
             int margin = std::min(20, limits.movetime_ms / 10);
@@ -352,6 +381,19 @@ namespace Engine {
         return Duration{ target_ms };
     }
 
+    Duration Search::calculate_hard_limit() const {
+        if (limits.movetime_ms > 0) return calculate_soft_limit(); // movetime is already authoritative
+
+        const int time_ms = (pos.side_to_move() == Color::WHITE) ? limits.wtime_ms : limits.btime_ms;
+        if (time_ms == 0) return Duration::max();
+
+        constexpr int HARD_LIMIT_MULTIPLIER = 4; // placeholder
+        const auto soft = calculate_soft_limit();
+        if (soft == Duration::max()) return soft;
+
+        return Duration{ std::min<int64_t>(soft.count() * HARD_LIMIT_MULTIPLIER, time_ms - 50) };
+    }
+
     bool Search::should_stop() const {
         if (stop.load(std::memory_order_relaxed)) {
             return true;
@@ -370,29 +412,31 @@ namespace Engine {
         return { .move = move, .score = score };
     }
     Move Search::find_best_move() {
-#if DEBUG_STATS
-        stats.reset();
-#endif
+
         nodes = 0;
-        Move best_move = Move::none();
+        Move best_move = Move::none(),last_best_move = Move::none();
 
         // Fallback to first legal move to prevent returning Move::none() on instant stops
         auto root_moves = pos.legal_moves();
-#if DEBUG_STATS
-        stats.legal_moves += root_moves.size();
-        stats.movegen_calls++;
-#endif
+
         if (!root_moves.empty()) {
-            best_move = root_moves[0];
+            best_move = last_best_move = root_moves[0];
+        }
+        //forced move no need to think;
+        if (root_moves.size() == 1 && !limits.infinite && limits.depth == 0 && limits.nodes == 0) {
+            return root_moves[0];
         }
 
         tt.new_search();
         start_time = Clock::now();
-        const auto duration_limit = calculate_time_limit();
-
-        search_deadline = (duration_limit == Duration::max())
+        const auto soft_limit = calculate_soft_limit();
+        search_deadline = (calculate_hard_limit() == Duration::max())
             ? std::chrono::time_point<Clock>::max()
-            : Clock::now() + duration_limit;
+            : Clock::now() + calculate_hard_limit();
+
+        int stability = 0;
+
+        constexpr std::array STABILITY_SCALE = {1.30, 1.15, 1.00, 0.90, 0.80}; // placeholder table, indexed by min(stability,4)
 
         for (int depth = 1; ; ++depth) {
             if (should_stop()) {
@@ -413,11 +457,16 @@ namespace Engine {
             }
 
             if (move != Move::none()) {
+                if (move == last_best_move) {
+                    stability = std::min(stability + 1, 4);
+                }
+                else {
+                    stability = 0;
+                    last_best_move = move;
+                }
                 best_move = move;
             }
-#if DEBUG_STATS
-            stats.nodes += nodes;
-#endif
+
             std::cout << "info depth " << depth;
 
             if (score > Eval::MATE_THRESHOLD) {
@@ -441,6 +490,10 @@ namespace Engine {
 
             if (limits.depth && depth >= limits.depth) {
                 return best_move;
+            }
+            if (soft_limit != Duration::max()) {
+                const auto scaled = Duration{ int64_t(soft_limit.count() * STABILITY_SCALE[stability]) };
+                if (elapsed >= scaled) return best_move;
             }
         }
 #if DEBUG_STATS

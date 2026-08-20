@@ -85,6 +85,8 @@ namespace ChessCore {
             return result;
         }
         static constexpr Move none() {return Move(0);}
+        static constexpr Move null() {return Move(1,1);}
+
 
         [[nodiscard]] constexpr uint16_t raw() const
         {

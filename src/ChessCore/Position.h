@@ -21,6 +21,7 @@ namespace ChessCore {
         int half_clock;
 
         //scoring
+        std::array<Value, 2> non_pawn_material;
         std::array<ScorePair,2> material_score;
         uint8_t phase;
         Key pawn_key;
@@ -56,6 +57,8 @@ namespace ChessCore {
         explicit Position(std::string_view fen);
         [[nodiscard]] std::string_view fen() const;
         void make_move(Move move);
+        void make_null_move();
+        void undo_null_move();
         [[nodiscard]] constexpr Piece square(const Square s) const { return board.get_piece(s); }
         [[nodiscard]] Color side_to_move() const {return side_to_move_;}
         void swap_side() {side_to_move_ = ~side_to_move_;}
@@ -115,6 +118,9 @@ namespace ChessCore {
             }
             return mt == MoveType::EN_PASSANT;
         }
+        [[nodiscard]] Value non_pawn_material(const Color c) const {return state().non_pawn_material[color_idx(c)];}
+        [[nodiscard]] Value non_pawn_material() const {return non_pawn_material(Color::WHITE) + non_pawn_material(Color::BLACK);}
+        [[nodiscard]] const StateInfo& previous() const {assert(ply_!=0);return history[ply_-1];}
 #ifndef NDEBUG
         void verify_zobrist() const {
             assert(current_state_.zobrist_key == zobrist_key(true));

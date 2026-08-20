@@ -29,7 +29,7 @@ namespace Engine {
 
     };
 
-    struct ScoredMove : public ChessCore::Move {
+    struct ScoredMove : ChessCore::Move {
         int score;
         ScoredMove& operator=(const Move move){data = move.raw();return *this;}
     };

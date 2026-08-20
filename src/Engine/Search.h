@@ -78,7 +78,7 @@ namespace Engine {
         Score stat_score; //ranks the move played based on history
         PV pv;
         bool ttPv;
-        Score staticEval;
+        Score static_eval;
     };
     class Search {
         constexpr static int SEARCHED_LIST_CAPACITY = 32;
@@ -100,10 +100,11 @@ namespace Engine {
         template <bool in_check>
         [[nodiscard]] Score quiesce(Score alpha, Score beta,SearchStack* ss);
         [[nodiscard]]SearchResult search(int depth,SearchStack* ss);
-        [[nodiscard]] std::chrono::milliseconds calculate_time_limit() const;
+        [[nodiscard]] std::chrono::milliseconds calculate_soft_limit() const;
+        [[nodiscard]] std::chrono::milliseconds calculate_hard_limit() const;
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
 
-        void update_stats(ChessCore::Move best_move, ChessCore::Move tt_move,int depth,const DumbVector<ChessCore::Move,SEARCHED_LIST_CAPACITY> &captures_searched,const SearchStack* ss);
+        void update_stats(ChessCore::Move best_move, ChessCore::Move tt_move,int depth,const DumbVector<ChessCore::Move,SEARCHED_LIST_CAPACITY> &captures_searched,const SearchStack* ss,bool PVNode);
 
     public:
         void stop_search() {stop.store(true,std::memory_order_relaxed);}

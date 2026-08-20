@@ -118,6 +118,7 @@ namespace ChessCore {
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
         current_state_.zobrist_key = zobrist_key(true);
         current_state_.pawn_key = 0;
+        current_state_.non_pawn_material = {0,0};
 
         for (const Color c : {Color::WHITE, Color::BLACK}) {
             BitBoard bb = color_bb(c);
@@ -129,6 +130,8 @@ namespace ChessCore {
                 current_state_.material_score[ci] +=Eval::evaluate_piece(p,s);
                 if (Pieces::getType(p) == PAWN) {
                     current_state_.pawn_key ^= PawnHash::hash(c,s);
+                }else if (Pieces::getType(p) != KING) {
+                    current_state_.non_pawn_material[ci] = Eval::piece_value(p);
                 }
             }
         }
@@ -148,6 +151,7 @@ namespace ChessCore {
 
         //ref to old state
         const auto& st = push_state(move,captured);
+        current_state_.captured = captured;
         Key& zobrist_key = current_state_.zobrist_key;
         Key& pawn_key = current_state_.pawn_key;
 
@@ -174,6 +178,8 @@ namespace ChessCore {
                 const auto promo =  makePiece(move.promotion_type(), us);
                 zobrist_key ^= Engine::Zobrist::piece_key(moving, from);
                 zobrist_key ^= Engine::Zobrist::piece_key(promo, to);
+
+                current_state_.non_pawn_material[color_idx(us)] += Eval::piece_value(promo);
 
                 pawn_key ^= Engine::PawnHash::hash(us,from);
 
@@ -225,11 +231,14 @@ namespace ChessCore {
         current_state_.half_clock = half_clock_move ? 0 : current_state_.half_clock + 1;
         if (captured != Pieces::EMPTY) {
             zobrist_key ^= Zobrist::piece_key(captured, captured_square);
-
             current_state_.material_score[color_idx(them)] -= Eval::evaluate_piece(captured, captured_square);
             current_state_.phase -= Eval::phase_value(Pieces::getType(captured));
 
             pawn_key ^= PawnHash::hash(them,captured_square);
+
+            if (Pieces::getType(captured) == PAWN) {
+                current_state_.non_pawn_material[color_idx(them)] -= Eval::piece_value(captured);
+            }
         }
         if (type != MoveType::PROMOTION) {
             current_state_.material_score[color_idx(us)] += Eval::evaluate_piece(moving,to) - Eval::evaluate_piece(moving,from);
@@ -239,7 +248,6 @@ namespace ChessCore {
                 pawn_key ^= PawnHash::hash(us,from);
                 pawn_key ^= PawnHash::hash(us,to);
             }
-
         }
         if (us == Color::BLACK) {
             ++fullmove_number_;
@@ -247,6 +255,7 @@ namespace ChessCore {
         swap_side();
         zobrist_key ^= Engine::Zobrist::tables.side_to_move;
         update_slider_blockers(side_to_move());
+        update_slider_blockers(~side_to_move());
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
                    color_bb(~side_to_move());
 
@@ -326,11 +335,45 @@ namespace ChessCore {
             }
 
         update_slider_blockers(side_to_move());
+        update_slider_blockers(~side_to_move());
         check_bb = attackers_to(
             king_square(side_to_move()),
             all_bb()
         ) & color_bb(~side_to_move());
     }
+
+    void Position::make_null_move() {
+        assert(!in_check());
+        const auto& st = push_state(Move::null(),Pieces::EMPTY);
+        Key& zobrist_key = current_state_.zobrist_key;
+        Key& pawn_key = current_state_.pawn_key;
+
+        if (st.ep_square != NO_SQUARE) {
+            current_state_.ep_square = NO_SQUARE;
+            zobrist_key ^= Zobrist::ep_key(st.ep_square);
+        }
+        zobrist_key ^= Zobrist::tables.side_to_move;
+        swap_side();
+        update_slider_blockers(side_to_move());
+        update_slider_blockers(~side_to_move());
+        check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
+                   color_bb(~side_to_move());
+        current_state_.repetition = 0;
+    }
+
+    void Position::undo_null_move() {
+        --ply_;
+        const StateInfo& st = history[ply_];
+        current_state_ = st;
+        swap_side();
+        update_slider_blockers(side_to_move());
+        update_slider_blockers(~side_to_move());
+        check_bb = attackers_to(
+            king_square(side_to_move()),
+            all_bb()
+        ) & color_bb(~side_to_move());
+    }
+
 
     void Position::handle_castling_rights(const Move move) {
         const Square from = move.from();
