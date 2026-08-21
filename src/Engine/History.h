@@ -10,9 +10,19 @@
 #include "Types.h"
 
 namespace Engine::History {
-    constexpr int CAPTURE_HISTORY_MAX = 10692;            //stockfish val don't question it
-    constexpr int Capture_Stat_Victim_Numerator   = 873;  //stockfish val don't question it
-    constexpr int Capture_Stat_Victim_Denominator = 128;  //stockfish val don't question it
+    constexpr int BUTTERFLY_MAX = 7200;
+    constexpr int CAPTURE_MAX   = 10800;
+
+    constexpr int BONUS_PER_DEPTH = 150;
+    constexpr int BONUS_MAX       = 1500;   // caps at depth 10
+    constexpr int MALUS_PER_DEPTH = 300;
+    constexpr int MALUS_MAX       = 2250;   // caps at depth 8
+    constexpr int BONUS_TT_MOVE   = 350;
+
+    constexpr int stat_bonus(int depth) { return std::min(BONUS_PER_DEPTH * depth, BONUS_MAX); }
+    constexpr int stat_malus(int depth) { return std::min(MALUS_PER_DEPTH * depth, MALUS_MAX); }
+
+
 
     template<typename T, int MAX_VALUE>
     struct StatsEntry {
@@ -38,13 +48,12 @@ namespace Engine::History {
                   - value * std::abs(bonus) / MAX_VALUE;
         }
     };
-    constexpr Score capture_stat_victim_value(const Value piece_value) {
-        return History::Capture_Stat_Victim_Numerator * piece_value //// NOLINT
-             / History::Capture_Stat_Victim_Denominator;
-    }
-    using CaptureHistoryEntry = StatsEntry<int16_t, CAPTURE_HISTORY_MAX>;
+    using ButterflyEntry = StatsEntry<Score,7200>;
+    using CaptureHistoryEntry = StatsEntry<int16_t, CAPTURE_MAX>;
     //[piece][to][captured piece type]
     using CaptureHistory =std::array<std::array<std::array<CaptureHistoryEntry,PT_NUMBER>,SQUARE_NUMBER>,PIECE_NUMBER>;
+    //[color][from][to]
+    using ButterflyHistory  = std::array<std::array<std::array<ButterflyEntry,SQUARE_NUMBER>,SQUARE_NUMBER>,COLOR_NUMBER>;
 
 
 } // Engine

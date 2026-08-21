@@ -13,9 +13,10 @@ namespace Engine {
         MAIN_TT,
         GEN_CAPTURES,
         GOOD_CAPTURES,
-        BAD_CAPTURES,
         GEN_QUIETS,
-        QUIETS,
+        GOOD_QUIETS,
+        BAD_CAPTURES,
+        BAD_QUIETS,
 
         // generate evasion moves
         EVASION_TT,
@@ -35,15 +36,18 @@ namespace Engine {
     };
 
     class MovePicker {
+        constexpr static int GOOD_QUIET_THRESHOLD = -History::BUTTERFLY_MAX / 4;   // -1800
+        constexpr static int quiet_sort_limit(const int depth) { return -600 * depth; }
         constexpr static int MAX_MOVES = 256;
         const ChessCore::Position& pos;
         ChessCore::Move tt_move;
         const History::CaptureHistory& capture_history;
+        const History::ButterflyHistory& butterfly_history;
         const int depth;
 
         PickStage stage;
 
-        ScoredMove *cur,*end,*end_bad_captures,*end_captures;
+        ScoredMove *cur, *end, *end_bad_captures, *begin_bad_quiets, *end_bad_quiets,*end_captures,*end_generated;
 
         ScoredMove moves[MAX_MOVES];
 
@@ -56,7 +60,7 @@ namespace Engine {
 
     public:
         // Constructor for Main Search
-        MovePicker(const ChessCore::Position& p, ChessCore::Move tt,int depth,const History::CaptureHistory& ch);
+        MovePicker(const ChessCore::Position& p, ChessCore::Move tt,int depth,const History::CaptureHistory& ch,const History::ButterflyHistory& bh);
 
 
         ChessCore::Move next_move();

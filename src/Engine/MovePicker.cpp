@@ -16,8 +16,8 @@ namespace Engine {
         s = static_cast<PickStage>(static_cast<int>(s) + 1);
         return s;
     }
-    MovePicker::MovePicker(const ChessCore::Position& p, const ChessCore::Move tt, const int depth ,const History::CaptureHistory& ch)
-        : pos(p), tt_move(tt),capture_history(ch),depth(depth) {
+    MovePicker::MovePicker(const ChessCore::Position& p, const ChessCore::Move tt, const int depth ,const History::CaptureHistory& ch,const History::ButterflyHistory& bh)
+        : pos(p), tt_move(tt),capture_history(ch),butterfly_history(bh),depth(depth) {
         if (pos.checkers()) {
             stage = EVASION_TT;
         }else {
@@ -51,53 +51,47 @@ namespace Engine {
                     MoveList<GenType::CAPTURES> caps(pos);
                     cur = moves;
                     end_bad_captures = moves;
-                    end = end_captures = score<GenType::CAPTURES>(caps);
+                    end = score<GenType::CAPTURES>(caps);
                     partial_insertion_sort(cur,end,std::numeric_limits<int>::min());
                     ++stage;
                     break;
                 }
                 case GOOD_CAPTURES: {
-                    auto filter = [&]() {
-                        if constexpr(true  || pos.see_ge(static_cast<Move>(*cur),0)) { //-cur->score/18;
-                            return true;
-                        }
-                        std::swap(*end_bad_captures++,*cur);
+                    auto filter = [&] {
+                        if (pos.see_ge(static_cast<Move>(*cur), -cur->score / 18)) return true;
+                        std::swap(*end_bad_captures++, *cur);
                         return false;
                     };
-                    if (select(filter) != Move::none()) {
-                        return static_cast<Move>(*(cur-1));
-                    }
-                    cur = moves;               // exhausted: loop over bad captures
-                    end = end_bad_captures;
-                    ++stage;
+                    if (select(filter) != Move::none()) return static_cast<Move>(*(cur - 1));
+                    ++stage;                                   // and nothing else
                     break;
                 }
                 case GEN_QUIETS: {
                     MoveList<GenType::QUIETS> movelist(pos);
-                    end = score<GenType::QUIETS>(movelist);
-                    partial_insertion_sort(cur, end, std::numeric_limits<int>::min());
+                    end_captures = cur;                        // quiets begin here
+                    end = end_generated = score<GenType::QUIETS>(movelist);
+                    partial_insertion_sort(cur, end, quiet_sort_limit(depth));
                     ++stage;
                     break;
                 }
-                case QUIETS: {
-                    return select([]() { return true; });
-                    //auto filter = [] { return true;};
-                    //if (select(filter) != Move::none())
-                    //    return static_cast<Move>(*(cur - 1));
-                    //cur = moves;
-                    //end = end_bad_captures;
-                    //++stage;
-                    //break;
+                case GOOD_QUIETS: {
+                    if (select([&] { return cur->score > GOOD_QUIET_THRESHOLD; }) != Move::none())
+                        return static_cast<Move>(*(cur - 1));
+                    cur = moves;
+                    end = end_bad_captures;
+                    ++stage;
+                    break;
                 }
                 case BAD_CAPTURES: {
-                    auto filter = [] { return true;};
-                    if (select(filter) != Move::none())
+                    if (select([] { return true; }) != Move::none())
                         return static_cast<Move>(*(cur - 1));
-                    //return Move::none(); //end of moves
-                    cur = end_captures;        // quiets get written after the captures
+                    cur = end_captures;                        // re-scan the quiets
+                    end = end_generated;
                     ++stage;
                     break;
                 }
+                case BAD_QUIETS:
+                    return select([&] { return cur->score <= GOOD_QUIET_THRESHOLD; });
                 case GEN_EVASION: {
                     MoveList<GenType::EVASIONS> movelist(pos);
                     cur = moves;
@@ -150,20 +144,16 @@ namespace Engine {
             const PieceType captured_pt =m.get_type() == MoveType::EN_PASSANT? PieceType::PAWN: Pieces::getType(pos.square(m.to()));
             if constexpr (Type == GenType::CAPTURES) {
                 const PieceType attacker_pt = Pieces::getType(moved);
-                //capture_history[moved][to][static_cast<int>(captured_pt)] * 0
-                m.score =  7 * static_cast<int>(Eval::piece_value(captured_pt))- static_cast<int>(Eval::piece_value(attacker_pt));
-                if (m.get_type() == MoveType::PROMOTION)
-                    m.score +=  static_cast<int>(Eval::piece_value(m.promotion_type())) + 100000;
+                m.score = capture_history[moved][to][static_cast<int>(captured_pt)]
+                 + 7 * static_cast<int>(Eval::piece_value(captured_pt));//- static_cast<int>(Eval::piece_value(attacker_pt));
             }else if constexpr (Type == GenType::QUIETS) {
-                m.score = 0;
-                if (m.get_type() == MoveType::PROMOTION)
-                    m.score = static_cast<int>(Eval::piece_value(m.promotion_type())) + 100000;
+                m.score = butterfly_history[color_idx(us)][from][to];
             }else if constexpr (Type == GenType::EVASIONS) {
                 const PieceType attacker_pt = Pieces::getType(moved);
                 if (pos.is_capture(move)) {
                     m.score = static_cast<int>(Eval::piece_value(captured_pt)) + (1<<28);
                 } else {
-                    m.score = 0;
+                    m.score = butterfly_history[color_idx(us)][from][to];
                 }
             }
         }

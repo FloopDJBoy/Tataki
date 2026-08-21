@@ -21,6 +21,7 @@ namespace Engine {
         TranspositionTable tt;
         PawnTT pawn_tt;
         History::CaptureHistory capture_history;
+        History::ButterflyHistory butterfly_history;
         std::unique_ptr<Search> searcher;
         std::jthread search_thread;
 

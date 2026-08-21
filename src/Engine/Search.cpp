@@ -25,7 +25,6 @@ namespace Engine {
         ++stats.qnodes;
 #endif
         ss->pv.clear();
-        ss->stat_score=0;
 
         if ((++nodes & 1023) == 0 && should_stop()) {
             stop_search();
@@ -100,7 +99,7 @@ namespace Engine {
             best_score = -Eval::INF;
         }
 
-        MovePicker move_picker(pos,tt_move,QSEARCH_DEPTH,capture_history);
+        MovePicker move_picker(pos,tt_move,QSEARCH_DEPTH,capture_history,butterfly_history);
 
         bool found_move = false;
 
@@ -146,37 +145,38 @@ namespace Engine {
         return best_score;
     }
 
-   void Search::update_stats(const Move best_move, const Move tt_move, const int depth,const DumbVector<Move,SEARCHED_LIST_CAPACITY> &captures_searched ,const SearchStack* ss,const bool PVNode) {
-        //stockfish magic numbers I have no idea how to name them
-        assert((ss-1)>=stack);
-        //const int prior_stat_score = ss > stack ? (ss - 1)->stat_score : 0;
-        const int bonus = std::min(133 * depth - 81, 1487) + 364 * (best_move == tt_move) + (ss-1)->stat_score;
-        const int malus = std::min(968 * depth - 235, 2244);
+    void Search::update_stats(const Move best_move, const Move tt_move, const int depth,
+                            const DumbVector<Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
+                            const DumbVector<Move, SEARCHED_LIST_CAPACITY>& captures_searched) {
+        const int bonus = History::stat_bonus(depth) + (best_move == tt_move) * History::BONUS_TT_MOVE;
+        const int malus = History::stat_malus(depth);
+        const Color us  = pos.side_to_move();
 
+        auto cap_entry = [&](const Move m) -> History::CaptureHistoryEntry& {
+            const Piece moved = pos.square(m.from());
+            const PieceType captured = m.get_type() == MoveType::EN_PASSANT
+                                     ? PieceType::PAWN
+                                     : Pieces::getType(pos.square(m.to()));
+            return capture_history[moved][m.to()][static_cast<int>(captured)];
+        };
 
         if (pos.is_capture(best_move)) {
-            const auto moved = pos.square(best_move.from());
-            const auto captured_type = best_move.get_type() == MoveType::EN_PASSANT ?
-                                   PieceType::PAWN :
-                                   Pieces::getType(pos.square(best_move.to()));
-            capture_history[moved][best_move.to()][static_cast<int>(captured_type)].add(bonus * 1427 / 1024); //more stockfish magic numbers
-        }
-        for (Move move : captures_searched) {
-            const auto moved = pos.square(move.from());
-            const auto captured_type = move.get_type() == MoveType::EN_PASSANT ?
-                                       PieceType::PAWN :
-                                       Pieces::getType(pos.square(move.to()));
-            capture_history[moved][move.to()][static_cast<int>(captured_type)].add(-malus* 1489 / 1024);//even more stockfish magic numbers
+            cap_entry(best_move).add(bonus);
+        } else {
+            butterfly_history[color_idx(us)][best_move.from()][best_move.to()].add(bonus);
+            for (const Move m : quiets_searched)
+                butterfly_history[color_idx(us)][m.from()][m.to()].add(-malus);
         }
 
-   }
+        for (const Move m : captures_searched)
+            cap_entry(m).add(-malus);
+    }
     template<NodeType node_type>
     Score Search::alpha_beta(Score alpha, const Score beta, const int depth, SearchStack* ss) {
         constexpr bool PvNode   = node_type != NodeType::NonPV;
         constexpr bool RootNode = node_type == NodeType::Root;
 
         ss->pv.clear();
-        ss->stat_score = 0;
 
 
         if ((++nodes & 1023) == 0 && should_stop()) stop_search();
@@ -192,6 +192,7 @@ namespace Engine {
         }
 
         DumbVector<Move,SEARCHED_LIST_CAPACITY> captured_searched;
+        DumbVector<Move,SEARCHED_LIST_CAPACITY> quiets_searched;
         const Key zobrist_key = pos.zobrist_key();
         const Engine::TTEntry* tt_entry = tt[zobrist_key];
         Move tt_move = Move::none();
@@ -283,7 +284,7 @@ namespace Engine {
                 ss->pv.update(legal[0]);   // fallback if we're interrupted before improving alpha
         }
 
-        MovePicker move_picker(pos, tt_move, depth, capture_history);
+        MovePicker move_picker(pos, tt_move, depth, capture_history,butterfly_history);
         int i = 0;
         for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
             if (!pos.legal(move)) continue;
@@ -296,8 +297,6 @@ namespace Engine {
             if (capture) {
                 const int captured_type = static_cast<int>(Pieces::getType(pos.state().captured));
                 const auto captured_value = Eval::piece_value(pos.state().captured);
-                ss->stat_score = History::capture_stat_victim_value(captured_value)
-                               + capture_history[moved_piece][move.to()][captured_type];
             }
 
             Score score;
@@ -325,8 +324,13 @@ namespace Engine {
                     ss->pv.update(move, (ss + 1)->pv);
                 }
             }
-            if (capture && move != best_move && i <= SEARCHED_LIST_CAPACITY)
-                captured_searched.push_back(move);
+            if (move != best_move && i <= SEARCHED_LIST_CAPACITY) {
+                if (capture) {
+                    captured_searched.push_back(move);
+                }else {
+                    quiets_searched.push_back(move);
+                }
+            }
 
             if (alpha >= beta) break;
         }
@@ -344,7 +348,7 @@ namespace Engine {
                                                            : Bound::EXACT;
             if constexpr (!RootNode) {
                 if (best_move != Move::none() && best_score > original_alpha)
-                    update_stats(best_move, tt_move, depth, captured_searched, ss,PvNode);
+                    update_stats(best_move, tt_move, depth, captured_searched,quiets_searched);
             }
             tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
         }

@@ -39,7 +39,8 @@ namespace UCI {
             "4r1k1/3n1ppp/4p3/3p4/3P4/3BPN2/1p3PPP/1R4K1 b - - 1 24"
         };
         bool check_move_picker(const ChessCore::Position& pos, const ChessCore::Move tt,
-                       const int depth, const Engine::History::CaptureHistory& ch) {
+                       const int depth, const Engine::History::CaptureHistory& ch,
+                       const Engine::History::ButterflyHistory& bh) {
             using namespace ChessCore;
             using namespace ChessCore::MoveGen;
 
@@ -57,7 +58,7 @@ namespace UCI {
             }
 
             const bool tt_ok = tt != Move::none() && expected.contains(tt.raw());
-            Engine::MovePicker mp(pos, tt_ok ? tt : Move::none(), depth, ch);
+            Engine::MovePicker mp(pos, tt_ok ? tt : Move::none(), depth, ch,bh);
             for (Move m = mp.next_move(); m != Move::none(); m = mp.next_move()) {
                 got[m.raw()]++;
                 label[m.raw()] = m;
@@ -82,6 +83,7 @@ namespace UCI {
             using namespace ChessCore::MoveGen;
 
             static Engine::History::CaptureHistory ch{};   // 13 KB, zero-initialised
+            static Engine::History::ButterflyHistory bh{};   //zero-initialised
 
             std::ifstream in(path);
             if (!in) { std::cerr << "cannot open " << path << "\n"; return; }
@@ -105,7 +107,7 @@ namespace UCI {
                 for (const int depth : {0, 1, 4})
                     for (const Move tt : candidates) {
                         ++checks;
-                        if (!check_move_picker(pos, tt, depth, ch)) ++failures;
+                        if (!check_move_picker(pos, tt, depth, ch,bh)) ++failures;
                     }
             }
             std::cout << "mpcheck: " << positions << " positions, "
