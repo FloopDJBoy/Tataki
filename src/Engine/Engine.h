@@ -42,7 +42,12 @@ namespace Engine {
               position(pos ? *pos : ChessCore::FenHelper::STARTING_POSITION) {
             for (auto& a : capture_history) {
                 for (auto& b : a) {
-                    b.fill({-742});
+                    b.fill({0});
+                }
+            }
+            for (auto& a : butterfly_history) {
+                for (auto& b : a) {
+                    b.fill({0});
                 }
             }
         }
@@ -54,7 +59,12 @@ namespace Engine {
             pawn_tt.clear();
             for (auto& a : capture_history) {
                 for (auto& b : a) {
-                    b.fill({-742});
+                    b.fill({0});
+                }
+            }
+            for (auto& a : butterfly_history) {
+                for (auto& b : a) {
+                    b.fill({0});
                 }
             }
         }

@@ -60,10 +60,10 @@ namespace Engine::Eval {
         if (islands_b > 1) score -= PAWN_ISLAND_PENALTY * static_cast<int16_t>(islands_b - 1);
 
         // --- 2. DOUBLED ---
-        const BitBoard doubled_w = pawns_w & (pawns_w >> 8);
-        const BitBoard doubled_b = pawns_b & (pawns_b << 8);
-        score += DOUBLED_PAWN_PENALTY * static_cast<int16_t>(std::popcount(doubled_w));
-        score -= DOUBLED_PAWN_PENALTY * static_cast<int16_t>(std::popcount(doubled_b));
+        const int doubled_w = BitBoards::count_doubled(pawns_w);
+        const int doubled_b = BitBoards::count_doubled(pawns_b);
+        score += DOUBLED_PAWN_PENALTY * static_cast<int16_t>(doubled_w);
+        score -= DOUBLED_PAWN_PENALTY * static_cast<int16_t>(doubled_b);
 
         // --- 3. CONNECTED ---
         // Phalanx (side-by-side)

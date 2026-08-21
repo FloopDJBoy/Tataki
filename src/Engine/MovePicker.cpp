@@ -148,6 +148,8 @@ namespace Engine {
                  + 7 * static_cast<int>(Eval::piece_value(captured_pt));//- static_cast<int>(Eval::piece_value(attacker_pt));
             }else if constexpr (Type == GenType::QUIETS) {
                 m.score = butterfly_history[color_idx(us)][from][to];
+                if (m.get_type() == MoveType::PROMOTION)
+                    m.score += 16 * static_cast<int>(Eval::piece_value(m.promotion_type()));
             }else if constexpr (Type == GenType::EVASIONS) {
                 const PieceType attacker_pt = Pieces::getType(moved);
                 if (pos.is_capture(move)) {

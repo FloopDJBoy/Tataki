@@ -95,6 +95,16 @@ namespace ChessCore::BitBoards {
     constexpr BitBoard get_file_bb(const Square s) {
         return FILE_A << file_of(s); //
     }
+    // Project every pawn down onto rank 1: one bit per occupied file.
+    constexpr BitBoard file_bits(BitBoard pawns) {
+        pawns |= pawns >> 32;
+        pawns |= pawns >> 16;
+        pawns |= pawns >> 8;
+        return pawns & RANK_1;
+    }
+    constexpr int count_doubled(const BitBoard pawns) {
+        return std::popcount(pawns) - std::popcount(file_bits(pawns));
+    }
 
     constexpr BitBoard get_adjacent_files(const Square s) {
         const BitBoard f = get_file_bb(s);
