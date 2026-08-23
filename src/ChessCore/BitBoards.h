@@ -95,6 +95,17 @@ namespace ChessCore::BitBoards {
     constexpr BitBoard get_file_bb(const Square s) {
         return FILE_A << file_of(s); //
     }
+    // Expand one bit per file (living on rank 1) back into full files.
+    constexpr BitBoard fill_files(const BitBoard file_bits_) {
+        return (file_bits_ & RANK_1) * FILE_A;
+    }
+
+    // Files that hold a pawn but have no pawn on either adjacent file.
+    // These are exactly the one-file-wide islands.
+    constexpr BitBoard lone_files(const BitBoard file_bits_) {
+        const BitBoard adj = ((file_bits_ << 1) | (file_bits_ >> 1)) & RANK_1;
+        return file_bits_ & ~adj;
+    }
     // Project every pawn down onto rank 1: one bit per occupied file.
     constexpr BitBoard file_bits(BitBoard pawns) {
         pawns |= pawns >> 32;

@@ -78,7 +78,14 @@ namespace Engine {
        // Score stat_score;
         PV pv;
         bool ttPv;
-        Score static_eval;
+        Score static_eval = 0;
+        std::array<ChessCore::Move,2> killers = {ChessCore::Move::none(), ChessCore::Move::none()};
+        void update_killer(const ChessCore::Move m) {
+            if (killers[0] != m) {
+                killers[1] = killers[0];
+                killers[0] = m;
+            }
+        }
     };
     class Search {
         constexpr static int SEARCHED_LIST_CAPACITY = 32;
@@ -108,6 +115,7 @@ namespace Engine {
         void update_stats(ChessCore::Move best_move, const ChessCore::Move tt_move, const int depth,
                           const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
                           const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& captures_searched);
+        static int reduction(int depth,int move_count);
 
     public:
         void stop_search() {stop.store(true,std::memory_order_relaxed);}

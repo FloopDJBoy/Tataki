@@ -35,12 +35,22 @@ namespace Engine {
 
             // 1. Same position: overwrite and preserve best move if new move is empty
             if (entry.key == key) {
-                const ChessCore::Move move_to_store = (best_move != ChessCore::Move{})
-                                                ? best_move
-                                                : entry.best_move;
+                // A real move always beats none — refresh it unconditionally.
+                if (best_move != ChessCore::Move::none())
+                    entry.best_move = best_move;
 
-                // Overwrite if new search is deeper, or from a new search, or exact bound
-                entry = TTEntry{.key = key, .score = score, .depth = depth, .best_move = move_to_store, .bound_pv = TTEntry::pack(bound,is_pv), .age = generation};
+                const auto age_diff = static_cast<uint8_t>(generation - entry.age);
+
+                // Only overwrite the score payload if this result is at least as trustworthy.
+                if (bound == Bound::EXACT
+                    || age_diff != 0
+                    || depth + 2 * static_cast<int>(is_pv) > entry.depth - 4)
+                {
+                    entry.score    = score;
+                    entry.depth    = depth;
+                    entry.bound_pv = TTEntry::pack(bound, is_pv);
+                    entry.age      = generation;
+                }
                 return;
             }
 

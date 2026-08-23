@@ -63,6 +63,25 @@ namespace Engine::Eval {
             ScorePair( 67,130), ScorePair( 67,130), ScorePair( 67,130)
         }
     };
+    // Base penalties
+    constexpr ScorePair ISOLATED_PAWN_PENALTY = ScorePair(-15, -25);
+    constexpr ScorePair DOUBLED_PAWN_PENALTY  = ScorePair(-11, -20);
+    constexpr ScorePair BACKWARD_PAWN_PENALTY = ScorePair(-9, -24);
+    constexpr ScorePair PAWN_ISLAND_PENALTY   = ScorePair(-25, -35); // Applied per island after the 1st
+    constexpr ScorePair CONNECTED_PAWN_BONUS  = ScorePair( 7,   8);  // Flat bonus per connected pawn
+
+    // Rank-based bonuses (Index is the Rank 0-7)
+    // Passed pawns get exponentially stronger as they advance.
+    constexpr std::array<ScorePair, 8> PASSED_PAWN_BONUS = {
+        ScorePair( 0,   0), ScorePair( 5,  10), ScorePair(10,  25), ScorePair(20,  45),
+        ScorePair(35,  75), ScorePair(60, 120), ScorePair(90, 170), ScorePair( 0,   0)
+    };
+
+    // Advancement alone is a weakness; connected advancement is a strength.
+    constexpr std::array<ScorePair, 8> CONNECTED_ADVANCEMENT_BONUS = {
+        ScorePair( 0,  0), ScorePair( 0,  0), ScorePair( 2,  4), ScorePair( 4,  8),
+        ScorePair(10, 16), ScorePair(20, 32), ScorePair(30, 48), ScorePair( 0,  0)
+    };
     using PieceSquareTable = std::array<Score, 64>;
     struct PieceEval {
         Value mg_value;

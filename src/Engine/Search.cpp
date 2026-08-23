@@ -17,6 +17,27 @@ namespace Engine {
     using Duration = std::chrono::milliseconds;
     static auto start_time = Clock::now();
     constexpr int QSEARCH_DEPTH = 0;
+    namespace {
+        constexpr double LMR_BASE    = 0.99;
+        constexpr double LMR_DIVISOR = 3.14;
+
+        struct ReductionTable {
+            static constexpr int MAX_D = 64, MAX_M = 64;
+            int r[MAX_D][MAX_M]{};
+            ReductionTable() {
+                for (int d = 1; d < MAX_D; ++d)
+                    for (int m = 1; m < MAX_M; ++m)
+                        r[d][m] = static_cast<int>(
+                            1024.0 * (LMR_BASE + std::log(d) * std::log(m) / LMR_DIVISOR));
+            }
+        };
+        const auto reductions = ReductionTable();
+    }
+    int Search::reduction(const int depth, const int move_count) {
+        return reductions.r[std::min(depth, ReductionTable::MAX_D - 1)]
+                          [std::min(move_count, ReductionTable::MAX_M - 1)];
+    }
+
     template <bool in_check>
     Score Search::quiesce(Score alpha, Score beta, SearchStack *ss) {
         assert(ss >= stack);
@@ -99,7 +120,7 @@ namespace Engine {
             best_score = -Eval::INF;
         }
 
-        MovePicker move_picker(pos,tt_move,QSEARCH_DEPTH,capture_history,butterfly_history);
+        MovePicker move_picker(pos,tt_move,QSEARCH_DEPTH,capture_history,butterfly_history,ss->killers);
 
         bool found_move = false;
 
@@ -177,6 +198,7 @@ namespace Engine {
         constexpr bool RootNode = node_type == NodeType::Root;
 
         ss->pv.clear();
+        const bool in_check = pos.in_check();
 
 
         if ((++nodes & 1023) == 0 && should_stop()) stop_search();
@@ -188,13 +210,14 @@ namespace Engine {
         }
 
         if (depth <= 0) {
-            return pos.in_check() ? quiesce<true>(alpha, beta, ss) : quiesce<false>(alpha, beta, ss);
+            return in_check ? quiesce<true>(alpha, beta, ss) : quiesce<false>(alpha, beta, ss);
         }
 
         DumbVector<Move,SEARCHED_LIST_CAPACITY> captured_searched;
         DumbVector<Move,SEARCHED_LIST_CAPACITY> quiets_searched;
         const Key zobrist_key = pos.zobrist_key();
         const Engine::TTEntry* tt_entry = tt[zobrist_key];
+
         Move tt_move = Move::none();
         const Score original_alpha = alpha;
 
@@ -229,12 +252,12 @@ namespace Engine {
 
 
 
-        ss->static_eval = pos.in_check()
+        ss->static_eval = in_check
             ? (pos.ply() >= 2 ? (ss - 2)->static_eval : 0)
             : Eval::evaluate(pos);
         const bool improving = pos.ply() >= 2 && ss->static_eval > (ss - 2)->static_eval;
         //RFP
-        if (!pos.in_check()
+        if (!in_check
             && depth <= RFP_MAX_DEPTH
             && (tt_move == Move::none() || pos.is_capture(tt_move))
             && beta > -Eval::MATE_THRESHOLD          // beta isn't already a near-mate loosing score
@@ -256,7 +279,7 @@ namespace Engine {
             constexpr Score NMP_IMPROVING_REDUCTION = 25;
             constexpr int   R                       = 3;
 
-            if (!pos.in_check()
+            if (!in_check
                 && depth >= NMP_MIN_DEPTH
                 && pos.previous().move != Move::null()
                 && beta > -Eval::MATE_THRESHOLD
@@ -284,7 +307,7 @@ namespace Engine {
                 ss->pv.update(legal[0]);   // fallback if we're interrupted before improving alpha
         }
 
-        MovePicker move_picker(pos, tt_move, depth, capture_history,butterfly_history);
+        MovePicker move_picker(pos, tt_move, depth, capture_history,butterfly_history,ss->killers);
         int i = 0;
         for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
             if (!pos.legal(move)) continue;
@@ -299,19 +322,24 @@ namespace Engine {
                 const auto captured_value = Eval::piece_value(pos.state().captured);
             }
 
-            Score score;
-            if constexpr (PvNode) {
-                //PVS
-                if (i == 1) {
-                    score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1));
-                } else {
-                    score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, depth - 1, ss + 1));
-                    if (score > alpha && score < beta)
-                        score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, depth - 1, ss + 1));
-                }
-            } else {
-                score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-beta, -alpha, depth - 1, ss + 1));
+            Score score = -Eval::INF;
+            bool full_null_window;
+            if (depth>=3 && i>=4 && !capture && !in_check) {
+                const int r = reduction(depth,i);
+                const int d = std::clamp(depth - 1  - (r  / 1024), 1, depth -1);
+                score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, d, ss + 1));
+                full_null_window = (score > alpha && d < depth -1);
+            }else {
+                full_null_window = !PvNode || i > 1;
             }
+            if (full_null_window)
+                score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, depth-1, ss + 1));
+            if constexpr (PvNode) {
+                if (i == 1 || (score > alpha && score < beta)) {
+                    score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, depth -1 , ss + 1));
+                }
+            }
+            const bool gives_check = pos.in_check();
             pos.undo_move();
 
             if (stop.load(std::memory_order_relaxed)) return 0;
@@ -332,12 +360,17 @@ namespace Engine {
                 }
             }
 
-            if (alpha >= beta) break;
+            if (alpha >= beta) {
+                if (!capture) {
+                    ss->update_killer(move);
+                }
+                break;
+            }
         }
 
         if constexpr (!RootNode) {
             if (!found_move) {
-                if (pos.in_check()) return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
+                if (in_check) return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
                 return 0;
             }
         }
@@ -449,7 +482,6 @@ namespace Engine {
             }
 
             SearchStack* ss = stack;
-            assert(ss->stat_score == 0);
             const auto [move, score] = search(depth, ss);
             const auto elapsed = std::chrono::duration_cast<Duration>(Clock::now() - start_time);
 

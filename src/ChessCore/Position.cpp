@@ -107,9 +107,9 @@ namespace ChessCore {
 
         return result;
     }
-    //move is assume legal
+
     Position::Position(const Board board,const CastlingRight cr,const Square ep,const Color side,const int half_clock,const int full_move)
-    : board(board),side_to_move_(side),ply_(0), fullmove_number_(full_move) {
+    : board(board),side_to_move_(side),ply_(0), fullmove_number_(full_move), current_state_{} {
         current_state_.castling_rights = cr;
         current_state_.ep_square = ep;
         current_state_.half_clock = half_clock;
@@ -119,6 +119,7 @@ namespace ChessCore {
         current_state_.zobrist_key = zobrist_key(true);
         current_state_.pawn_key = 0;
         current_state_.non_pawn_material = {0,0};
+        current_state_.phase = 0;
 
         for (const Color c : {Color::WHITE, Color::BLACK}) {
             BitBoard bb = color_bb(c);
@@ -128,15 +129,17 @@ namespace ChessCore {
                 const auto ci = color_idx(c);
 
                 current_state_.material_score[ci] +=Eval::evaluate_piece(p,s);
+                current_state_.phase += Eval::phase_value(Pieces::getType(p));
                 if (Pieces::getType(p) == PAWN) {
                     current_state_.pawn_key ^= PawnHash::hash(c,s);
                 }else if (Pieces::getType(p) != KING) {
-                    current_state_.non_pawn_material[ci] = Eval::piece_value(p);
+                    current_state_.non_pawn_material[ci] += Eval::piece_value(p);
                 }
             }
         }
 
     }
+    //move is assume legal
     void Position::make_move(const Move move) {
 
         const Square from = move.from();

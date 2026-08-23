@@ -43,6 +43,7 @@ namespace Engine {
         ChessCore::Move tt_move;
         const History::CaptureHistory& capture_history;
         const History::ButterflyHistory& butterfly_history;
+        const std::array<ChessCore::Move,2>& killers;
         const int depth;
 
         PickStage stage;
@@ -60,7 +61,7 @@ namespace Engine {
 
     public:
         // Constructor for Main Search
-        MovePicker(const ChessCore::Position& p, ChessCore::Move tt,int depth,const History::CaptureHistory& ch,const History::ButterflyHistory& bh);
+        MovePicker(const ChessCore::Position& p, ChessCore::Move tt,int depth,const History::CaptureHistory& ch,const History::ButterflyHistory& bh,const std::array<ChessCore::Move,2>& killer);
 
 
         ChessCore::Move next_move();

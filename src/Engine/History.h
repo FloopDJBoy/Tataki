@@ -19,6 +19,8 @@ namespace Engine::History {
     constexpr int MALUS_MAX       = 2250;   // caps at depth 8
     constexpr int BONUS_TT_MOVE   = 350;
 
+    constexpr int BONUS_KILLER = BUTTERFLY_MAX + 100;
+
     constexpr int stat_bonus(int depth) { return std::min(BONUS_PER_DEPTH * depth, BONUS_MAX); }
     constexpr int stat_malus(int depth) { return std::min(MALUS_PER_DEPTH * depth, MALUS_MAX); }
 

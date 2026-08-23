@@ -65,9 +65,8 @@ constexpr CastlingRight operator&(CastlingRight a, CastlingRight b)
 constexpr CastlingRight WHITE_CASTLING_MASK = CastlingRight::WhiteKingSide | CastlingRight::WhiteQueenSide;
 constexpr CastlingRight BLACK_CASTLING_MASK = CastlingRight::BlackKingSide | CastlingRight::BlackQueenSide;
 constexpr std::array CASTLING_MASK = {WHITE_CASTLING_MASK, BLACK_CASTLING_MASK};
-constexpr Color operator~(const Color c)
-{
-    return c == Color::WHITE ? Color::BLACK : Color::WHITE;
+constexpr Color operator~(const Color c) {
+    return static_cast<Color>(static_cast<uint8_t>(c) ^ 0b1000u);
 }
 constexpr int color_idx(const Color c) {
     return  c == Color::WHITE ? 0 : 1;

@@ -7,6 +7,7 @@
 #include "Position.h"
 #include "Types.h"
 
+
 namespace ChessCore::FenHelper {
     using std::string_view;
     using namespace std::string_view_literals;
@@ -92,13 +93,21 @@ namespace ChessCore::FenHelper {
         const auto sv = get_x_split(4,fen);
         if (sv == "-")
             return 0;
-        return sv[0] - '0';
+        if (sv.size() > 1) {
+            return (sv[0] - '0')*10 + (sv[1] - '0');
+        }else {
+            return  sv[0] - '0';
+        }
     }
     constexpr int32_t get_full_move_clock(const string_view fen) {
         const auto sv = get_x_split(5,fen);
         if (sv == "-")
             return 1;
-        return sv[0] - '0';
+        if (sv.size() > 1) {
+            return (sv[0] - '0')*10 + (sv[1] - '0');
+        }else {
+            return sv[0] - '0';
+        }
     }
     inline Position fen_to_pos(const string_view fen) {
         const auto board = get_board(fen);

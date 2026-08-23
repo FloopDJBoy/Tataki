@@ -9,27 +9,7 @@
 #include "ChessCore/Position.h"
 namespace Engine::Eval {
     using namespace ChessCore;
-    namespace {
-        // Base penalties
-        constexpr ScorePair ISOLATED_PAWN_PENALTY = ScorePair(-15, -25);
-        constexpr ScorePair DOUBLED_PAWN_PENALTY  = ScorePair(-11, -20);
-        constexpr ScorePair BACKWARD_PAWN_PENALTY = ScorePair(-9, -24);
-        constexpr ScorePair PAWN_ISLAND_PENALTY   = ScorePair(-10, -10); // Applied per island after the 1st
-        constexpr ScorePair CONNECTED_PAWN_BONUS  = ScorePair( 7,   8);  // Flat bonus per connected pawn
-
-        // Rank-based bonuses (Index is the Rank 0-7)
-        // Passed pawns get exponentially stronger as they advance.
-        constexpr std::array<ScorePair, 8> PASSED_PAWN_BONUS = {
-            ScorePair( 0,   0), ScorePair( 5,  10), ScorePair(10,  25), ScorePair(20,  45),
-            ScorePair(35,  75), ScorePair(60, 120), ScorePair(90, 170), ScorePair( 0,   0)
-        };
-
-        // Advancement alone is a weakness; connected advancement is a strength.
-        constexpr std::array<ScorePair, 8> CONNECTED_ADVANCEMENT_BONUS = {
-            ScorePair( 0,  0), ScorePair( 0,  0), ScorePair( 2,  4), ScorePair( 4,  8),
-            ScorePair(10, 16), ScorePair(20, 32), ScorePair(30, 48), ScorePair( 0,  0)
-        };
-    }
+    
 
     static constexpr Square mirror(const Square s) {
         return s ^ 56;
@@ -51,21 +31,13 @@ namespace Engine::Eval {
     }
     ScorePair static evaluate_pawn_structure(const BitBoard pawns_w, const BitBoard pawns_b) {
         ScorePair score;
-
-        // --- 1. ISLANDS ---
-        const int islands_w = BitBoards::count_islands(pawns_w);
-        const int islands_b = BitBoards::count_islands(pawns_b);
-        // Penalize islands after the first one
-        if (islands_w > 1) score += PAWN_ISLAND_PENALTY * static_cast<int16_t>(islands_w - 1);
-        if (islands_b > 1) score -= PAWN_ISLAND_PENALTY * static_cast<int16_t>(islands_b - 1);
-
-        // --- 2. DOUBLED ---
+        // --- 1. DOUBLED ---
         const int doubled_w = BitBoards::count_doubled(pawns_w);
         const int doubled_b = BitBoards::count_doubled(pawns_b);
         score += DOUBLED_PAWN_PENALTY * static_cast<int16_t>(doubled_w);
         score -= DOUBLED_PAWN_PENALTY * static_cast<int16_t>(doubled_b);
 
-        // --- 3. CONNECTED ---
+        // --- 2. CONNECTED ---
         // Phalanx (side-by-side)
         const BitBoard phalanx_w = pawns_w & ((pawns_w << 1 & ~ChessCore::BitBoards::FILE_A) | (pawns_w >> 1 & ~ChessCore::BitBoards::FILE_H));
         const BitBoard phalanx_b = pawns_b & ((pawns_b << 1 & ~ChessCore::BitBoards::FILE_A) | (pawns_b >> 1 & ~ChessCore::BitBoards::FILE_H));
@@ -80,19 +52,22 @@ namespace Engine::Eval {
         score += CONNECTED_PAWN_BONUS * static_cast<int16_t>(std::popcount(connected_w));
         score -= CONNECTED_PAWN_BONUS * static_cast<int16_t>(std::popcount(connected_b));
 
-        // --- 4. ISOLATED ---
-        // Smear adjacent files vertically
-        auto get_support_files = [](const BitBoard p) {
-            BitBoard adj = ChessCore::BitBoards::shift_pawns<Color::WHITE, ChessCore::BitBoards::Direction::LEFT>(p) |
-                           ChessCore::BitBoards::shift_pawns<Color::WHITE, ChessCore::BitBoards::Direction::RIGHT>(p);
-            adj |= adj >> 32; adj |= adj >> 16; adj |= adj >> 8;
-            return adj;
-        };
-        const BitBoard support_files_w = get_support_files(pawns_w);
-        const BitBoard support_files_b = get_support_files(pawns_b);
+        // --- 3. ISLANDS & ISOLATED ---
+        const BitBoard fw = BitBoards::file_bits(pawns_w);
+        const BitBoard fb = BitBoards::file_bits(pawns_b);
 
-        const BitBoard isolated_w = pawns_w & ~support_files_w;
-        const BitBoard isolated_b = pawns_b & ~support_files_b;
+        const BitBoard lone_w = BitBoards::lone_files(fw);
+        const BitBoard lone_b = BitBoards::lone_files(fb);
+
+        // Islands spanning two or more files. One-file islands are charged by the isolated term instead.
+        const int groups_w = std::popcount(fw & ~(fw << 1)) - std::popcount(lone_w);
+        const int groups_b = std::popcount(fb & ~(fb << 1)) - std::popcount(lone_b);
+
+        if (groups_w > 1) score += PAWN_ISLAND_PENALTY * static_cast<int16_t>(groups_w - 1);
+        if (groups_b > 1) score -= PAWN_ISLAND_PENALTY * static_cast<int16_t>(groups_b - 1);
+
+        const BitBoard isolated_w = pawns_w & BitBoards::fill_files(lone_w);
+        const BitBoard isolated_b = pawns_b & BitBoards::fill_files(lone_b);
 
         score += ISOLATED_PAWN_PENALTY * static_cast<int16_t>(std::popcount(isolated_w));
         score -= ISOLATED_PAWN_PENALTY * static_cast<int16_t>(std::popcount(isolated_b));
