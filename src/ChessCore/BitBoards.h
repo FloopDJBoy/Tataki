@@ -394,6 +394,30 @@ namespace ChessCore::BitBoards {
             return get_rook_attack(square, occupancy)
             | get_bishop_attack(square, occupancy);
         }
+        //remove warning
+        assert(false);
+        return 0;
+    }
+    constexpr BitBoard get_attacks_bb(const PieceType pt,const Square square,const BitBoard occupancy) {
+        if  (pt == PieceType::KNIGHT) {
+            return knight_attacks[square];
+        }
+        if  (pt == PieceType::KING) {
+            return king_attacks[square];
+        }
+        if  (pt == PieceType::ROOK) {
+            return get_rook_attack(square,occupancy);
+        }
+        if  (pt == PieceType::BISHOP) {
+            return get_bishop_attack(square,occupancy);
+        }
+        if  (pt == PieceType::QUEEN) {
+            return get_rook_attack(square, occupancy)
+                   | get_bishop_attack(square, occupancy);
+        }
+        //remove warning
+        assert(false);
+        return 0;
     }
     template<Color c>
     constexpr BitBoard get_pawns_attacks(const BitBoard pawns) {

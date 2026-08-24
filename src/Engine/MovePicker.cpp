@@ -68,15 +68,17 @@ namespace Engine {
                     break;
                 }
                 case GEN_QUIETS: {
-                    MoveList<GenType::QUIETS> movelist(pos);
-                    end_captures = cur;                        // quiets begin here
-                    end = end_generated = score<GenType::QUIETS>(movelist);
-                    partial_insertion_sort(cur, end, quiet_sort_limit(depth));
+                    if (!skip_quiets_) {
+                        MoveList<GenType::QUIETS> movelist(pos);
+                        end_captures = cur;                        // quiets begin here
+                        end = end_generated = score<GenType::QUIETS>(movelist);
+                        partial_insertion_sort(cur, end, quiet_sort_limit(depth));
+                    }
                     ++stage;
                     break;
                 }
                 case GOOD_QUIETS: {
-                    if (select([&] { return cur->score > GOOD_QUIET_THRESHOLD; }) != Move::none())
+                    if (!skip_quiets_ && select([&] { return cur->score > GOOD_QUIET_THRESHOLD; }) != Move::none())
                         return static_cast<Move>(*(cur - 1));
                     cur = moves;
                     end = end_bad_captures;
@@ -92,7 +94,10 @@ namespace Engine {
                     break;
                 }
                 case BAD_QUIETS:
-                    return select([&] { return cur->score <= GOOD_QUIET_THRESHOLD; });
+                    if (!skip_quiets_) {
+                        return select([&] { return cur->score <= GOOD_QUIET_THRESHOLD; });
+                    }
+                    return Move::none();
                 case GEN_EVASION: {
                     MoveList<GenType::EVASIONS> movelist(pos);
                     cur = moves;

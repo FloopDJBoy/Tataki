@@ -39,6 +39,7 @@ namespace Engine {
         constexpr static int GOOD_QUIET_THRESHOLD = -History::BUTTERFLY_MAX / 4;   // -1800
         constexpr static int quiet_sort_limit(const int depth) { return -600 * depth; }
         constexpr static int MAX_MOVES = 256;
+        bool skip_quiets_ = false;
         const ChessCore::Position& pos;
         ChessCore::Move tt_move;
         const History::CaptureHistory& capture_history;
@@ -60,11 +61,9 @@ namespace Engine {
         static void partial_insertion_sort(ScoredMove* begin, const ScoredMove* end, int limit);
 
     public:
-        // Constructor for Main Search
         MovePicker(const ChessCore::Position& p, ChessCore::Move tt,int depth,const History::CaptureHistory& ch,const History::ButterflyHistory& bh,const std::array<ChessCore::Move,2>& killer);
-
-
         ChessCore::Move next_move();
+        void skip_quiets() {skip_quiets_ = true;}
     };
 
 } // namespace Engine

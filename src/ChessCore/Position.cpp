@@ -113,8 +113,7 @@ namespace ChessCore {
         current_state_.castling_rights = cr;
         current_state_.ep_square = ep;
         current_state_.half_clock = half_clock;
-        update_slider_blockers(Color::WHITE);
-        update_slider_blockers(Color::BLACK);
+        update_check_info();
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
         current_state_.zobrist_key = zobrist_key(true);
         current_state_.pawn_key = 0;
@@ -257,8 +256,7 @@ namespace ChessCore {
         }
         swap_side();
         zobrist_key ^= Engine::Zobrist::tables.side_to_move;
-        update_slider_blockers(side_to_move());
-        update_slider_blockers(~side_to_move());
+        update_check_info();
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
                    color_bb(~side_to_move());
 
@@ -337,8 +335,7 @@ namespace ChessCore {
             board.set_piece(to, st.captured);
             }
 
-        update_slider_blockers(side_to_move());
-        update_slider_blockers(~side_to_move());
+        update_check_info();
         check_bb = attackers_to(
             king_square(side_to_move()),
             all_bb()
@@ -357,8 +354,7 @@ namespace ChessCore {
         }
         zobrist_key ^= Zobrist::tables.side_to_move;
         swap_side();
-        update_slider_blockers(side_to_move());
-        update_slider_blockers(~side_to_move());
+        update_check_info();
         check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
                    color_bb(~side_to_move());
         current_state_.repetition = 0;
@@ -369,8 +365,7 @@ namespace ChessCore {
         const StateInfo& st = history[ply_];
         current_state_ = st;
         swap_side();
-        update_slider_blockers(side_to_move());
-        update_slider_blockers(~side_to_move());
+        update_check_info();
         check_bb = attackers_to(
             king_square(side_to_move()),
             all_bb()
@@ -397,6 +392,7 @@ namespace ChessCore {
         if (from == h8 || to == h8)
             current_state_.castling_rights &= ~CastlingRight::BlackKingSide;
     }
+
     //ui func do not call in engine
     std::set<Square> Position::get_moves_squares(const Square s) const {
         auto set = std::set<Square>();
@@ -419,6 +415,8 @@ namespace ChessCore {
         }
         return false;
     }
+
+
     bool Position::legal(const Move move) const {
         const Square from = move.from();
         const Square to = move.to();
@@ -441,6 +439,8 @@ namespace ChessCore {
         }
         return !(blockers_for_king(side_to_move()) & BitBoards::make_bitboard(from)) || (BitBoards::line_bb[from][to]) & piece_bb(PieceType::KING,side_to_move());
     }
+
+
     inline const StateInfo& Position::push_state(const Move move, const Piece captured)
     {
         StateInfo& st = history[ply_++];
@@ -481,6 +481,27 @@ namespace ChessCore {
                 }
             }
         }
+    }
+
+    void Position::update_check_info() {
+        using namespace BitBoards;
+        update_slider_blockers(Color::WHITE);
+        update_slider_blockers(Color::BLACK);
+
+        const Square ksq = king_square(side_to_move());
+        const BitBoard bishop = get_attacks_bb<BISHOP>(ksq,all_bb());
+        const BitBoard rook = get_attacks_bb<ROOK>(ksq,all_bb());
+
+
+        check_squares_[static_cast<int>(PAWN)] = side_to_move() == Color::WHITE ? get_single_pawn_attacks<Color::BLACK>(ksq)
+                                                                            : get_single_pawn_attacks<Color::WHITE>(ksq);
+        check_squares_[static_cast<int>(KNIGHT)] = get_attacks_bb<KNIGHT>(ksq);
+        check_squares_[static_cast<int>(BISHOP)] = bishop;
+        check_squares_[static_cast<int>(ROOK)] = rook;
+        check_squares_[static_cast<int>(QUEEN)] = rook | bishop;
+        check_squares_[static_cast<int>(KING)] = 0;
+
+
     }
 
     BitBoard Position::attackers_to(Square s, BitBoard occupancy) const
@@ -677,6 +698,50 @@ namespace ChessCore {
         //good for play vs humans
         return false;
     }
+
+    //this is called before make_move
+    bool Position::gives_check(const Move move) const {
+        const Square from =move.from() ,to = move.to();
+        const Piece moving = square(move.from());
+        const Square ksq = king_square(~side_to_move());
+
+        if (check_squares(Pieces::getType(moving)) & to) {
+            return true;
+        }
+
+        //discovered check
+        if (blockers_for_king(~side_to_move()) & from) {
+            return !(BitBoards::line_bb[from][to] & piece_bb(KING,~side_to_move())) || move.get_type() == MoveType::CASTLING;
+        }
+        if (move.get_type() == MoveType::NORMAL) {
+            return false;
+        }
+        if (move.get_type() == MoveType::PROMOTION) {
+            return BitBoards::get_attacks_bb(move.promotion_type(),to,all_bb() & ~BitBoards::make_bitboard(from)) & piece_bb(KING,~side_to_move());
+        }
+        if (move.get_type() == MoveType::EN_PASSANT) {
+            const int offset = (side_to_move() == Color::WHITE) ? 8 : -8;
+            const Square capture_square = to - offset;
+            BitBoard after_bb = (all_bb() & ~BitBoards::make_bitboard(from) & ~BitBoards::make_bitboard(capture_square)) | BitBoards::make_bitboard(to);
+
+            const BitBoard bishop = BitBoards::get_attacks_bb<BISHOP>(ksq,after_bb);
+            const BitBoard rook = BitBoards::get_attacks_bb<ROOK>(ksq,after_bb);
+
+            return rook & (piece_bb(ROOK, side_to_move()) | piece_bb(QUEEN, side_to_move()))
+            || bishop & (piece_bb(BISHOP, side_to_move()) | piece_bb(QUEEN, side_to_move()));
+        }
+        //CASTLING
+        const Square rook_start =
+                   from == e1 ? (to == g1 ? h1 : a1)
+                              : (to == g8 ? h8 : a8);
+        const Square rook_end =
+                   side_to_move() == Color::WHITE
+                       ? (rook_start == a1 ? d1 : f1)
+                       : (rook_start == a8 ? d8 : f8);
+        return check_squares(ROOK) & rook_end;
+    }
+
+
     Move Position::parse_move(const std::string& move_string) const {
         auto from_name = magic_enum::enum_cast<SquareName>(move_string.substr(0,2));
         auto to_name   = magic_enum::enum_cast<SquareName>(move_string.substr(2,2));

@@ -30,14 +30,15 @@ namespace ChessCore {
         static constexpr int16_t MAX_PLY = 512;
         Board board;
         BitBoard check_bb = 0ull;
-        std::array<BitBoard, 2> blockers_for_king_ = {0ull,0ull};
+        std::array<BitBoard, COLOR_NUMBER> blockers_for_king_ = {0ull,0ull};
         StateInfo current_state_;
         std::array<StateInfo, MAX_PLY> history;
         Color side_to_move_ = Color::WHITE;
         int16_t ply_;
         int16_t root_ply_ = 0; // ply_ value when this copy was handed to Search
         int32_t fullmove_number_;
-        std::array<BitBoard,2> pinners_ = {0,0};
+        std::array<BitBoard,COLOR_NUMBER> pinners_ = {0,0};
+        std::array<BitBoard,PT_NUMBER> check_squares_{};
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
         public:
@@ -69,7 +70,9 @@ namespace ChessCore {
         [[nodiscard]] constexpr BitBoard color_bb(const Color c) const { return board.color_bitboard[color_idx(c)]; }
         [[nodiscard]] constexpr BitBoard all_bb() const { return board.all_piece_bitboard; }
         [[nodiscard]] constexpr BitBoard ep_square() const { return current_state_.ep_square; }
-        [[nodiscard]] BitBoard  piece_bb(PieceType p) const { return piece_bb(Pieces::makePiece(p,Color::WHITE)) | piece_bb(Pieces::makePiece(p,Color::BLACK)); }
+        [[nodiscard]] BitBoard  piece_bb(const PieceType p) const { return piece_bb(Pieces::makePiece(p,Color::WHITE)) | piece_bb(Pieces::makePiece(p,Color::BLACK)); }
+        [[nodiscard]] BitBoard check_squares(const PieceType p) const {return check_squares_[static_cast<int>(p)];}
+
         bool try_make_move(Move move);
         [[nodiscard]] CastlingRight castling_rights() const { return current_state_.castling_rights; }
         template<Color Side>
@@ -89,6 +92,7 @@ namespace ChessCore {
         [[nodiscard]] bool legal(Move move) const;
         [[nodiscard]] std::set<Square> get_moves_squares(Square s) const;
         [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return blockers_for_king_[color_idx(c)];}
+        void update_check_info();
         [[nodiscard]] Move parse_move(const std::string & move_string) const;
         [[nodiscard]] Move parse_move(Square from, Square to, PieceType promo) const;
         [[nodiscard]] BitBoard attackers_to(Square s , BitBoard occupancy) const;
@@ -120,6 +124,7 @@ namespace ChessCore {
         }
         [[nodiscard]] Value non_pawn_material(const Color c) const {return state().non_pawn_material[color_idx(c)];}
         [[nodiscard]] Value non_pawn_material() const {return non_pawn_material(Color::WHITE) + non_pawn_material(Color::BLACK);}
+        [[nodiscard]] bool gives_check(Move move) const;
         [[nodiscard]] const StateInfo& previous() const {assert(ply_!=0);return history[ply_-1];}
 #ifndef NDEBUG
         void verify_zobrist() const {

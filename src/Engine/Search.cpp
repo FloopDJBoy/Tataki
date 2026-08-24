@@ -246,12 +246,6 @@ namespace Engine {
             }
         }
 
-        constexpr int   RFP_MAX_DEPTH           = 8;   // free parameter
-        constexpr Score RFP_MARGIN_PER_DEPTH    = 80;  // free parameter
-        constexpr Score RFP_IMPROVING_REDUCTION = 60;  // free parameter
-
-
-
         ss->static_eval = in_check
             ? (pos.ply() >= 2 ? (ss - 2)->static_eval : 0)
             : Eval::evaluate(pos);
@@ -309,18 +303,25 @@ namespace Engine {
 
         MovePicker move_picker(pos, tt_move, depth, capture_history,butterfly_history,ss->killers);
         int i = 0;
+        const bool fp_ok = !RootNode
+                && !in_check
+                && depth <= FP_DEPTH
+                && alpha < Eval::MATE_THRESHOLD
+                && ss->static_eval + FP_MARGIN * depth <= alpha;
+
         for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
             if (!pos.legal(move)) continue;
             ++i;
             found_move = true;
             const bool capture = pos.is_capture(move);
-            Piece moved_piece = pos.square(move.from());
+            if (fp_ok && i > 1 && !capture && !pos.gives_check(move)) {
+                best_score = static_cast<Score>(std::max( static_cast<int>(best_score), ss->static_eval + FP_MARGIN * depth));
+                move_picker.skip_quiets();
+                continue;
+            }
             tt.prefetch(pos.prefetch_key(move));
             pos.make_move(move);
-            if (capture) {
-                const int captured_type = static_cast<int>(Pieces::getType(pos.state().captured));
-                const auto captured_value = Eval::piece_value(pos.state().captured);
-            }
+
 
             Score score = -Eval::INF;
             bool full_null_window;
@@ -339,10 +340,9 @@ namespace Engine {
                     score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, depth -1 , ss + 1));
                 }
             }
-            const bool gives_check = pos.in_check();
             pos.undo_move();
-
             if (stop.load(std::memory_order_relaxed)) return 0;
+
 
             if (score > best_score) {
                 best_score = score;
