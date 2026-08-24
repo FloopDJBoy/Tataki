@@ -47,7 +47,7 @@ namespace Engine {
         [[nodiscard]] int replacement_score(const TTEntry& e) const;
         explicit TranspositionTable(size_t megabytes);
         TranspositionTable() : TranspositionTable(128) {}
-        [[nodiscard]] inline TTEntry* operator [](const Key key) noexcept{
+        [[nodiscard]] TTEntry* operator [](const Key key) noexcept{
             TTEntry* bucket = &tt[(key & (NUM_BUCKETS - 1)) * BUCKET_SIZE];
             #pragma unroll
             for (int i = 0; i < BUCKET_SIZE; ++i) {

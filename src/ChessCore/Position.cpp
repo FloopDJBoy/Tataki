@@ -236,9 +236,11 @@ namespace ChessCore {
             current_state_.material_score[color_idx(them)] -= Eval::evaluate_piece(captured, captured_square);
             current_state_.phase -= Eval::phase_value(Pieces::getType(captured));
 
-            pawn_key ^= PawnHash::hash(them,captured_square);
+
 
             if (Pieces::getType(captured) == PAWN) {
+                pawn_key ^= PawnHash::hash(them,captured_square);
+            }else {
                 current_state_.non_pawn_material[color_idx(them)] -= Eval::piece_value(captured);
             }
         }
