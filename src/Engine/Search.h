@@ -88,9 +88,11 @@ namespace Engine {
         }
     };
     class Search {
-        constexpr static int   RFP_MAX_DEPTH           = 8;   // free parameter
-        constexpr static Score RFP_MARGIN_PER_DEPTH    = 80;  // free parameter
-        constexpr static Score RFP_IMPROVING_REDUCTION = 60;  // free parameter
+        constexpr static int   RFP_MAX_DEPTH           = 8;
+        constexpr static Score RFP_MARGIN_PER_DEPTH    = 80;
+        constexpr static Score RFP_IMPROVING_REDUCTION = 60;
+
+        constexpr static int IIR_MIN_DEPTH = 4;
 
         constexpr static int FP_DEPTH = 8;
         constexpr static Score FP_MARGIN  = 100; //per ply

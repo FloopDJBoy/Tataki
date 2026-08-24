@@ -193,7 +193,7 @@ namespace Engine {
             cap_entry(m).add(-malus);
     }
     template<NodeType node_type>
-    Score Search::alpha_beta(Score alpha, const Score beta, const int depth, SearchStack* ss) {
+    Score Search::alpha_beta(Score alpha, const Score beta, int depth, SearchStack* ss) {
         constexpr bool PvNode   = node_type != NodeType::NonPV;
         constexpr bool RootNode = node_type == NodeType::Root;
 
@@ -266,6 +266,10 @@ namespace Engine {
                 return ss->static_eval; // fail-soft; the (eval+beta)/2-style tweaks are a later tuning knob
         }
 
+        if (!RootNode && tt_move == Move::none() && depth >= IIR_MIN_DEPTH) {
+            --depth;
+        }
+
         if constexpr (!PvNode) {
             constexpr int   NMP_MIN_DEPTH           = 3;
             constexpr Score NMP_BASE_MARGIN         = 150;  // flat, dominant term
@@ -291,6 +295,7 @@ namespace Engine {
                     return null_value < Eval::MATE_THRESHOLD ? null_value : beta;
                 }
         }
+
 
         Score best_score = -Eval::INF;
         Move best_move = Move::none();

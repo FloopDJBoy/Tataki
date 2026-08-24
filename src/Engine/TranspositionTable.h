@@ -14,7 +14,7 @@ namespace Engine {
         Key key{0};                     // 8 bytes (offset 0)
         Score score{0};                 // 2 bytes (offset 8)
         int16_t depth{0};               // 2 bytes (offset 10)
-        ChessCore::Move best_move{};    // 2 bytes (offset 12)
+        ChessCore::Move best_move{ChessCore::Move::none()};    // 2 bytes (offset 12)
         uint8_t bound_pv{0};            // 1 byte  (offset 14) -- bits[0:1]=Bound, bit[2]=is_pv
         uint8_t age{0};                 // 1 byte  (offset 15)
 
