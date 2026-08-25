@@ -64,7 +64,7 @@ namespace Engine {
                         return false;
                     };
                     if (select(filter) != Move::none()) return static_cast<Move>(*(cur - 1));
-                    ++stage;                                   // and nothing else
+                    ++stage;
                     break;
                 }
                 case GEN_QUIETS: {

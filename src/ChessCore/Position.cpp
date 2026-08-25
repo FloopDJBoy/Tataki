@@ -113,9 +113,6 @@ namespace ChessCore {
         current_state_.castling_rights = cr;
         current_state_.ep_square = ep;
         current_state_.half_clock = half_clock;
-        update_check_info();
-        check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
-        current_state_.zobrist_key = zobrist_key(true);
         current_state_.pawn_key = 0;
         current_state_.non_pawn_material = {0,0};
         current_state_.phase = 0;
@@ -136,6 +133,9 @@ namespace ChessCore {
                 }
             }
         }
+        update_check_info();
+        check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
+        current_state_.zobrist_key = zobrist_key(true);
 
     }
     //move is assume legal
@@ -223,7 +223,23 @@ namespace ChessCore {
 
         if (Pieces::getType(moving) == PAWN) {
             half_clock_move = true;
-            current_state_.ep_square = (std::abs(to - from) == 16) ? to - offset : NO_SQUARE;
+            //current_state_.ep_square = (std::abs(to - from) == 16) ? to - offset : NO_SQUARE;
+            current_state_.ep_square = NO_SQUARE;
+            if ((static_cast<int>(to) ^ static_cast<int>(from)) == 16) {
+                const Square ep = to -offset;
+                const BitBoard cap_pawns = (us == Color::WHITE? BitBoards::get_single_pawn_attacks<Color::WHITE>(ep)
+                                    : BitBoards::get_single_pawn_attacks<Color::BLACK>(ep)) & piece_bb(PAWN, them);
+                if (cap_pawns) {
+                    //this only works before update_check_info() is called
+
+                    const Square ksq = king_square(them);
+                    const BitBoard not_blockers = ~blockers_for_king(them);
+                    const bool no_discovery = (BitBoards::make_bitboard(from) & not_blockers)
+                                           || BitBoards::file_of(from) == BitBoards::file_of(ksq);
+                    if (no_discovery && (cap_pawns & (not_blockers | BitBoards::line_bb[ep][ksq])))
+                        current_state_.ep_square = ep;
+                }
+            }
         } else {
             current_state_.ep_square = NO_SQUARE;
         }
@@ -283,10 +299,14 @@ namespace ChessCore {
         const Square from = move.from();
         const Square to = move.to();
 
+
         // Current side is the side that is about to move.
         // The side that made the move is the opposite.
         swap_side();
         const Color stm = side_to_move();
+        if (stm == Color::BLACK) {
+            --fullmove_number_;
+        }
 
         const MoveType type = move.get_type();
         const int offset = (stm == Color::WHITE) ? 8 : -8;
@@ -479,7 +499,7 @@ namespace ChessCore {
             if (blockers && !BitBoards::more_than_one(blockers)) {
                 blockers_for_king_[color_idx(c)] |= blockers;
                 if (blockers & color_bb(c)) {
-                    pinners_[color_idx(~c)] |= s;
+                    pinners_[color_idx(~c)] |= BitBoards::make_bitboard(s);
                 }
             }
         }
@@ -490,7 +510,7 @@ namespace ChessCore {
         update_slider_blockers(Color::WHITE);
         update_slider_blockers(Color::BLACK);
 
-        const Square ksq = king_square(side_to_move());
+        const Square ksq = king_square(~side_to_move());
         const BitBoard bishop = get_attacks_bb<BISHOP>(ksq,all_bb());
         const BitBoard rook = get_attacks_bb<ROOK>(ksq,all_bb());
 
@@ -707,12 +727,12 @@ namespace ChessCore {
         const Piece moving = square(move.from());
         const Square ksq = king_square(~side_to_move());
 
-        if (check_squares(Pieces::getType(moving)) & to) {
+        if (check_squares(Pieces::getType(moving)) & BitBoards::make_bitboard(to)) {
             return true;
         }
 
         //discovered check
-        if (blockers_for_king(~side_to_move()) & from) {
+        if (blockers_for_king(~side_to_move()) & BitBoards::make_bitboard(from)) {
             return !(BitBoards::line_bb[from][to] & piece_bb(KING,~side_to_move())) || move.get_type() == MoveType::CASTLING;
         }
         if (move.get_type() == MoveType::NORMAL) {
@@ -740,7 +760,7 @@ namespace ChessCore {
                    side_to_move() == Color::WHITE
                        ? (rook_start == a1 ? d1 : f1)
                        : (rook_start == a8 ? d8 : f8);
-        return check_squares(ROOK) & rook_end;
+        return check_squares(ROOK) & BitBoards::make_bitboard(rook_end);
     }
 
 

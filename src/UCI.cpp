@@ -273,7 +273,7 @@ namespace UCI {
                 if (token == "preft") {
                     int depth;
                     ss >> depth;
-                    ChessCore::preft::test(pos, depth);
+                    ChessCore::preft::divide(pos, depth);
                     continue;
                 }
                 auto limits = parse_go(command);

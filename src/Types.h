@@ -96,7 +96,7 @@ using Square = uint8_t;
 using BitBoard = uint64_t;
 using Key = uint64_t;
 using Score = int16_t;
-using Value = uint32_t;
+using Value = int32_t;
 
 constexpr int COLOR_NUMBER = 2;
 constexpr int SQUARE_NUMBER = 64;

@@ -246,9 +246,7 @@ namespace Engine {
             }
         }
 
-        ss->static_eval = in_check
-            ? (pos.ply() >= 2 ? (ss - 2)->static_eval : 0)
-            : Eval::evaluate(pos);
+        ss->static_eval = in_check? (pos.ply() >= 2 ? (ss - 2)->static_eval : 0): Eval::evaluate(pos);
         const bool improving = pos.ply() >= 2 && ss->static_eval > (ss - 2)->static_eval;
         //RFP
         if (!in_check

@@ -69,7 +69,7 @@ namespace ChessCore {
         [[nodiscard]] constexpr BitBoard piece_bb(const PieceType p,const Color color) const {assert(p != PieceType::EMPTY); return board.piece_bitboard[Pieces::makePiece(p,color)];}
         [[nodiscard]] constexpr BitBoard color_bb(const Color c) const { return board.color_bitboard[color_idx(c)]; }
         [[nodiscard]] constexpr BitBoard all_bb() const { return board.all_piece_bitboard; }
-        [[nodiscard]] constexpr BitBoard ep_square() const { return current_state_.ep_square; }
+        [[nodiscard]] constexpr Square ep_square() const { return current_state_.ep_square; }
         [[nodiscard]] BitBoard  piece_bb(const PieceType p) const { return piece_bb(Pieces::makePiece(p,Color::WHITE)) | piece_bb(Pieces::makePiece(p,Color::BLACK)); }
         [[nodiscard]] BitBoard check_squares(const PieceType p) const {return check_squares_[static_cast<int>(p)];}
 
