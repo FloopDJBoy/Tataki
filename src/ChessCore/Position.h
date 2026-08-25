@@ -19,6 +19,10 @@ namespace ChessCore {
         CastlingRight castling_rights;
         int repetition;  //3 fold repetition counter
         int half_clock;
+        std::array<BitBoard, COLOR_NUMBER> blockers_for_king = {0ull,0ull};
+        std::array<BitBoard,COLOR_NUMBER> pinners = {0,0};
+        std::array<BitBoard,PT_NUMBER> check_squares{};
+        BitBoard check_bb = 0ull;
 
         //scoring
         std::array<Value, 2> non_pawn_material;
@@ -29,16 +33,12 @@ namespace ChessCore {
     class Position {
         static constexpr int16_t MAX_PLY = 512;
         Board board;
-        BitBoard check_bb = 0ull;
-        std::array<BitBoard, COLOR_NUMBER> blockers_for_king_ = {0ull,0ull};
         StateInfo current_state_;
         std::array<StateInfo, MAX_PLY> history;
         Color side_to_move_ = Color::WHITE;
         int16_t ply_;
         int16_t root_ply_ = 0; // ply_ value when this copy was handed to Search
         int32_t fullmove_number_;
-        std::array<BitBoard,COLOR_NUMBER> pinners_ = {0,0};
-        std::array<BitBoard,PT_NUMBER> check_squares_{};
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
         public:
@@ -71,16 +71,16 @@ namespace ChessCore {
         [[nodiscard]] constexpr BitBoard all_bb() const { return board.all_piece_bitboard; }
         [[nodiscard]] constexpr Square ep_square() const { return current_state_.ep_square; }
         [[nodiscard]] BitBoard  piece_bb(const PieceType p) const { return piece_bb(Pieces::makePiece(p,Color::WHITE)) | piece_bb(Pieces::makePiece(p,Color::BLACK)); }
-        [[nodiscard]] BitBoard check_squares(const PieceType p) const {return check_squares_[static_cast<int>(p)];}
+        [[nodiscard]] BitBoard check_squares(const PieceType p) const {return state().check_squares[static_cast<int>(p)];}
 
         bool try_make_move(Move move);
-        [[nodiscard]] CastlingRight castling_rights() const { return current_state_.castling_rights; }
+        [[nodiscard]] CastlingRight castling_rights() const { return state().castling_rights; }
         template<Color Side>
         [[nodiscard]] bool can_castle_kingside() const {
             constexpr auto mask = Side == Color::WHITE ? CastlingRight::WhiteKingSide : CastlingRight::BlackKingSide;
             return (state().castling_rights & mask) != CastlingRight::None;
         }
-        [[nodiscard]] BitBoard checkers() const {return check_bb;}
+        [[nodiscard]] BitBoard checkers() const {return state().check_bb;}
         template<Color Side>
         [[nodiscard]] bool can_castle_queenside() const {
             constexpr auto mask = Side == Color::WHITE ? CastlingRight::WhiteQueenSide : CastlingRight::BlackQueenSide;
@@ -91,7 +91,7 @@ namespace ChessCore {
         void undo_move();
         [[nodiscard]] bool legal(Move move) const;
         [[nodiscard]] std::set<Square> get_moves_squares(Square s) const;
-        [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return blockers_for_king_[color_idx(c)];}
+        [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return state().blockers_for_king[color_idx(c)];}
         void update_check_info();
         [[nodiscard]] Move parse_move(const std::string & move_string) const;
         [[nodiscard]] Move parse_move(Square from, Square to, PieceType promo) const;
@@ -108,7 +108,7 @@ namespace ChessCore {
         [[nodiscard]] Key pawn_key() const {return state().pawn_key;}
         [[nodiscard]] bool is_3fold() const {return state().repetition >= 1;}
         [[nodiscard]] bool is_insufficient_material() const;
-        [[nodiscard]] BitBoard pinners(const Color c) const {return pinners_[color_idx(c)];}
+        [[nodiscard]] BitBoard pinners(const Color c) const {return state().pinners[color_idx(c)];}
         [[nodiscard]] Key prefetch_key(Move move) const;
         [[nodiscard]] bool is_draw() const {return is_3fold() || state().half_clock>=100 || is_insufficient_material();}
         [[nodiscard]] bool is_capture(const Move move) const {

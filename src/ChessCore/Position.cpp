@@ -134,7 +134,7 @@ namespace ChessCore {
             }
         }
         update_check_info();
-        check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
+        current_state_.check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
         current_state_.zobrist_key = zobrist_key(true);
 
     }
@@ -225,6 +225,7 @@ namespace ChessCore {
             half_clock_move = true;
             //current_state_.ep_square = (std::abs(to - from) == 16) ? to - offset : NO_SQUARE;
             current_state_.ep_square = NO_SQUARE;
+            //same as std::abs(to - from) == 16
             if ((static_cast<int>(to) ^ static_cast<int>(from)) == 16) {
                 const Square ep = to -offset;
                 const BitBoard cap_pawns = (us == Color::WHITE? BitBoards::get_single_pawn_attacks<Color::WHITE>(ep)
@@ -275,8 +276,7 @@ namespace ChessCore {
         swap_side();
         zobrist_key ^= Engine::Zobrist::tables.side_to_move;
         update_check_info();
-        check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
-                   color_bb(~side_to_move());
+        current_state_.check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
 
         current_state_.repetition = 0;
         if (current_state_.half_clock >= 4) {
@@ -352,16 +352,9 @@ namespace ChessCore {
         board.move_piece(to, from);
 
         // Restore normal captured piece
-        if (st.captured != Pieces::EMPTY &&
-            type != MoveType::EN_PASSANT) {
+        if (st.captured != Pieces::EMPTY && type != MoveType::EN_PASSANT) {
             board.set_piece(to, st.captured);
-            }
-
-        update_check_info();
-        check_bb = attackers_to(
-            king_square(side_to_move()),
-            all_bb()
-        ) & color_bb(~side_to_move());
+        }
     }
 
     void Position::make_null_move() {
@@ -377,8 +370,8 @@ namespace ChessCore {
         zobrist_key ^= Zobrist::tables.side_to_move;
         swap_side();
         update_check_info();
-        check_bb = attackers_to(king_square(side_to_move()), all_bb()) &
-                   color_bb(~side_to_move());
+        //not in check (look assert)
+        current_state_.check_bb = 0;
         current_state_.repetition = 0;
     }
 
@@ -387,11 +380,6 @@ namespace ChessCore {
         const StateInfo& st = history[ply_];
         current_state_ = st;
         swap_side();
-        update_check_info();
-        check_bb = attackers_to(
-            king_square(side_to_move()),
-            all_bb()
-        ) & color_bb(~side_to_move());
     }
 
 
@@ -473,8 +461,8 @@ namespace ChessCore {
     }
     void Position::update_slider_blockers(const Color c)
     {
-        blockers_for_king_[color_idx(c)] = 0;
-        pinners_[color_idx(~c)] = 0;
+        current_state_.blockers_for_king[color_idx(c)] = 0;
+        current_state_.pinners[color_idx(~c)] = 0;
 
         const Square ksq = king_square(c);
 
@@ -497,9 +485,9 @@ namespace ChessCore {
                 BitBoards::line_between[ksq][s] & occupancy;
 
             if (blockers && !BitBoards::more_than_one(blockers)) {
-                blockers_for_king_[color_idx(c)] |= blockers;
+                current_state_.blockers_for_king[color_idx(c)] |= blockers;
                 if (blockers & color_bb(c)) {
-                    pinners_[color_idx(~c)] |= BitBoards::make_bitboard(s);
+                    current_state_.pinners[color_idx(~c)] |= BitBoards::make_bitboard(s);
                 }
             }
         }
@@ -515,13 +503,13 @@ namespace ChessCore {
         const BitBoard rook = get_attacks_bb<ROOK>(ksq,all_bb());
 
 
-        check_squares_[static_cast<int>(PAWN)] = side_to_move() == Color::WHITE ? get_single_pawn_attacks<Color::BLACK>(ksq)
-                                                                            : get_single_pawn_attacks<Color::WHITE>(ksq);
-        check_squares_[static_cast<int>(KNIGHT)] = get_attacks_bb<KNIGHT>(ksq);
-        check_squares_[static_cast<int>(BISHOP)] = bishop;
-        check_squares_[static_cast<int>(ROOK)] = rook;
-        check_squares_[static_cast<int>(QUEEN)] = rook | bishop;
-        check_squares_[static_cast<int>(KING)] = 0;
+        current_state_.check_squares[static_cast<int>(PAWN)] = side_to_move() == Color::WHITE ? get_single_pawn_attacks<Color::BLACK>(ksq)
+                                                                           : get_single_pawn_attacks<Color::WHITE>(ksq);
+        current_state_.check_squares[static_cast<int>(KNIGHT)] = get_attacks_bb<KNIGHT>(ksq);
+        current_state_.check_squares[static_cast<int>(BISHOP)] = bishop;
+        current_state_.check_squares[static_cast<int>(ROOK)] = rook;
+        current_state_.check_squares[static_cast<int>(QUEEN)] = rook | bishop;
+        current_state_.check_squares[static_cast<int>(KING)] = 0;
 
 
     }
@@ -721,7 +709,6 @@ namespace ChessCore {
         return false;
     }
 
-    //this is called before make_move
     bool Position::gives_check(const Move move) const {
         const Square from =move.from() ,to = move.to();
         const Piece moving = square(move.from());
