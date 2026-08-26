@@ -139,7 +139,7 @@ namespace ChessCore {
 
     }
     //move is assume legal
-    void Position::make_move(const Move move) {
+    void Position::make_move(const Move move,bool gives_check) {
 
         const Square from = move.from();
         const Square to = move.to();
@@ -276,7 +276,7 @@ namespace ChessCore {
         swap_side();
         zobrist_key ^= Engine::Zobrist::tables.side_to_move;
         update_check_info();
-        current_state_.check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
+        current_state_.check_bb = gives_check? attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move()): 0;
 
         current_state_.repetition = 0;
         if (current_state_.half_clock >= 4) {

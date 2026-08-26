@@ -57,13 +57,20 @@ namespace ChessCore {
         }
         explicit Position(std::string_view fen);
         [[nodiscard]] std::string_view fen() const;
-        void make_move(Move move);
+
+
+        void make_move(const Move move){make_move(move,gives_check(move));};
+        void make_move(Move move,bool gives_check);
+        void undo_move();
         void make_null_move();
         void undo_null_move();
+
+
         [[nodiscard]] constexpr Piece square(const Square s) const { return board.get_piece(s); }
         [[nodiscard]] Color side_to_move() const {return side_to_move_;}
         void swap_side() {side_to_move_ = ~side_to_move_;}
         [[nodiscard]] const StateInfo& state() const {return current_state_;}
+
         [[nodiscard]] Square king_square(const Color side) const {return board.king_squares[color_idx(side)];}
         [[nodiscard]] constexpr BitBoard piece_bb(const Piece p) const {assert(Pieces::getType(p) != PieceType::EMPTY); return board.piece_bitboard[p];}
         [[nodiscard]] constexpr BitBoard piece_bb(const PieceType p,const Color color) const {assert(p != PieceType::EMPTY); return board.piece_bitboard[Pieces::makePiece(p,color)];}
@@ -71,16 +78,21 @@ namespace ChessCore {
         [[nodiscard]] constexpr BitBoard all_bb() const { return board.all_piece_bitboard; }
         [[nodiscard]] constexpr Square ep_square() const { return current_state_.ep_square; }
         [[nodiscard]] BitBoard  piece_bb(const PieceType p) const { return piece_bb(Pieces::makePiece(p,Color::WHITE)) | piece_bb(Pieces::makePiece(p,Color::BLACK)); }
+
+
         [[nodiscard]] BitBoard check_squares(const PieceType p) const {return state().check_squares[static_cast<int>(p)];}
+        [[nodiscard]] CastlingRight castling_rights() const { return state().castling_rights; }
+        [[nodiscard]] BitBoard checkers() const {return state().check_bb;}
+        [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return state().blockers_for_king[color_idx(c)];}
 
         bool try_make_move(Move move);
-        [[nodiscard]] CastlingRight castling_rights() const { return state().castling_rights; }
+
+
         template<Color Side>
         [[nodiscard]] bool can_castle_kingside() const {
             constexpr auto mask = Side == Color::WHITE ? CastlingRight::WhiteKingSide : CastlingRight::BlackKingSide;
             return (state().castling_rights & mask) != CastlingRight::None;
         }
-        [[nodiscard]] BitBoard checkers() const {return state().check_bb;}
         template<Color Side>
         [[nodiscard]] bool can_castle_queenside() const {
             constexpr auto mask = Side == Color::WHITE ? CastlingRight::WhiteQueenSide : CastlingRight::BlackQueenSide;
@@ -88,10 +100,8 @@ namespace ChessCore {
         }
         inline const StateInfo& push_state(Move move, Piece captured);
         void handle_castling_rights(Move move);
-        void undo_move();
         [[nodiscard]] bool legal(Move move) const;
         [[nodiscard]] std::set<Square> get_moves_squares(Square s) const;
-        [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return state().blockers_for_king[color_idx(c)];}
         void update_check_info();
         [[nodiscard]] Move parse_move(const std::string & move_string) const;
         [[nodiscard]] Move parse_move(Square from, Square to, PieceType promo) const;

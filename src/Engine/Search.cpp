@@ -317,13 +317,14 @@ namespace Engine {
             ++i;
             found_move = true;
             const bool capture = pos.is_capture(move);
-            if (fp_ok && i > 1 && !capture && !pos.gives_check(move)) {
+            const bool gives_check = pos.gives_check(move);
+            if (fp_ok && i > 1 && !capture && !gives_check) {
                 best_score = static_cast<Score>(std::max( static_cast<int>(best_score), ss->static_eval + FP_MARGIN * depth));
                 move_picker.skip_quiets();
                 continue;
             }
             tt.prefetch(pos.prefetch_key(move));
-            pos.make_move(move);
+            pos.make_move(move,gives_check);
 
 
             Score score = -Eval::INF;
