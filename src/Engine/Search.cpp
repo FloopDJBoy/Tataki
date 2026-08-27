@@ -246,8 +246,8 @@ namespace Engine {
             }
         }
 
-        ss->static_eval = in_check? (pos.ply() >= 2 ? (ss - 2)->static_eval : 0): Eval::evaluate(pos);
-        const bool improving = pos.ply() >= 2 && ss->static_eval > (ss - 2)->static_eval;
+        ss->static_eval = in_check? (ss - 2)->static_eval : Eval::evaluate(pos,&pawn_tt,alpha,beta);
+        const bool improving = ss->static_eval > (ss - 2)->static_eval;
         //RFP
         if (!in_check
             && depth <= RFP_MAX_DEPTH
@@ -324,6 +324,8 @@ namespace Engine {
                 continue;
             }
             tt.prefetch(pos.prefetch_key(move));
+            ss->current_move = move;
+            ss->moved_piece = pos.square(move.from());
             pos.make_move(move,gives_check);
 
 
@@ -385,7 +387,7 @@ namespace Engine {
                                                            : Bound::EXACT;
             if constexpr (!RootNode) {
                 if (best_move != Move::none() && best_score > original_alpha)
-                    update_stats(best_move, tt_move, depth, captured_searched,quiets_searched);
+                    update_stats(best_move, tt_move, depth,quiets_searched,captured_searched);
             }
             tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
         }
@@ -477,6 +479,7 @@ namespace Engine {
 
         int stability = 0;
 
+
         constexpr std::array STABILITY_SCALE = {1.30, 1.15, 1.00, 0.90, 0.80}; // placeholder table, indexed by min(stability,4)
 
         for (int depth = 1;depth<PV::MAX_PLY; ++depth) {
@@ -485,7 +488,7 @@ namespace Engine {
                 break;
             }
 
-            SearchStack* ss = stack;
+            SearchStack* ss = stack+7;
             const auto [move, score] = search(depth, ss);
             const auto elapsed = std::chrono::duration_cast<Duration>(Clock::now() - start_time);
 
@@ -510,9 +513,9 @@ namespace Engine {
             std::cout << "info depth " << depth;
 
             if (score > Eval::MATE_THRESHOLD) {
-                std::cout << " score mate " << (Eval::MATE_SCORE - score);
+                std::cout << " score mate " <<  (Eval::MATE_SCORE - score + 1) / 2;
             } else if (score < -Eval::MATE_THRESHOLD) {
-                std::cout << " score mate " << (-Eval::MATE_SCORE - score);
+                std::cout << " score mate " << -(Eval::MATE_SCORE + score + 1) / 2;
             } else {
                 std::cout << " score cp " << score;
             }

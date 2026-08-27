@@ -77,9 +77,12 @@ namespace Engine {
     struct SearchStack {
        // Score stat_score;
         PV pv;
-        bool ttPv;
-        Score static_eval = 0;
+        bool ttPv = false;
+        Score static_eval = Eval::NO_SCORE;
         std::array<ChessCore::Move,2> killers = {ChessCore::Move::none(), ChessCore::Move::none()};
+        ChessCore::Move current_move  = ChessCore::Move::none();
+        Piece           moved_piece  = ChessCore::Pieces::EMPTY;
+        History::PieceToHistory* continuation_history = nullptr;
         void update_killer(const ChessCore::Move m) {
             if (killers[0] != m) {
                 killers[1] = killers[0];
@@ -111,6 +114,7 @@ namespace Engine {
         TranspositionTable& tt;
         History::CaptureHistory& capture_history;
         History::ButterflyHistory& butterfly_history;
+        History::ContinuationHistory& continuation_history;
         PawnTT& pawn_tt;
         template<NodeType node_type>
         Score alpha_beta(Score alpha, Score beta,int depth,SearchStack* ss);
@@ -122,18 +126,25 @@ namespace Engine {
         [[nodiscard]] std::chrono::milliseconds calculate_hard_limit() const;
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
 
-        void update_stats(ChessCore::Move best_move, const ChessCore::Move tt_move, const int depth,
+        void update_stats(ChessCore::Move best_move, ChessCore::Move tt_move, int depth,
                           const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
                           const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& captures_searched);
         static int reduction(int depth,int move_count);
 
     public:
         void stop_search() {stop.store(true,std::memory_order_relaxed);}
-        Search(const ChessCore::Position &p,const SearchLimits& search_limits,TranspositionTable& t,PawnTT& pawn_t,History::CaptureHistory& capture_history,History::ButterflyHistory& butterfly_history)
+        Search(const ChessCore::Position &p,
+            const SearchLimits& search_limits,
+            TranspositionTable& t,
+            PawnTT& pawn_t,
+            History::CaptureHistory& capture_history,
+            History::ButterflyHistory& butterfly_history,
+            History::ContinuationHistory& continuation_history)
         :pos(p.copy_for_search())
         ,limits(search_limits),tt(t),pawn_tt(pawn_t),
         capture_history(capture_history),
-        butterfly_history(butterfly_history)
+        butterfly_history(butterfly_history),
+        continuation_history(continuation_history)
         {};
         ChessCore::Move find_best_move();
 #if DEBUG_STATS

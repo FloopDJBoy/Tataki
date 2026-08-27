@@ -50,12 +50,21 @@ namespace Engine::History {
                   - value * std::abs(bonus) / MAX_VALUE;
         }
     };
+    using ContHistEntry = StatsEntry<Score,30000>;
     using ButterflyEntry = StatsEntry<Score,7200>;
     using CaptureHistoryEntry = StatsEntry<int16_t, CAPTURE_MAX>;
     //[piece][to][captured piece type]
     using CaptureHistory =std::array<std::array<std::array<CaptureHistoryEntry,PT_NUMBER>,SQUARE_NUMBER>,PIECE_NUMBER>;
     //[color][from][to]
     using ButterflyHistory  = std::array<std::array<std::array<ButterflyEntry,SQUARE_NUMBER>,SQUARE_NUMBER>,COLOR_NUMBER>;
+
+    //[piece][to]
+    using PieceToHistory = std::array<std::array<ContHistEntry, SQUARE_NUMBER>, PIECE_NUMBER>;
+
+    //history of pair of moves
+    //opponent [piece][to] ->(ply -1) [piece][to]
+    //us [piece][to] ->(ply-2) [piece][to]
+    using ContinuationHistory = std::array<std::array<PieceToHistory, SQUARE_NUMBER>, PIECE_NUMBER>;
 
 
 } // Engine

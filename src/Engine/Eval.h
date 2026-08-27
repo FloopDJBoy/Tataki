@@ -279,6 +279,7 @@ namespace Engine::Eval {
     constexpr Score INF = 32000;
     constexpr Score MATE_SCORE = 30000;
     constexpr Score NEG_INF = -INF;
+    constexpr Score NO_SCORE = INF + 2;
     constexpr static Score MATE_THRESHOLD = Eval::MATE_SCORE -1000;
     static constexpr auto make_PSQT() {
         std::array<std::array<ScorePair,64>,15> arr{};

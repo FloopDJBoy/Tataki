@@ -22,6 +22,7 @@ namespace Engine {
         PawnTT pawn_tt;
         History::CaptureHistory capture_history;
         History::ButterflyHistory butterfly_history;
+        History::ContinuationHistory continuation_history;
         std::unique_ptr<Search> searcher;
         std::jthread search_thread;
 
@@ -42,12 +43,17 @@ namespace Engine {
               position(pos ? *pos : ChessCore::FenHelper::STARTING_POSITION) {
             for (auto& a : capture_history) {
                 for (auto& b : a) {
-                    b.fill({0});
+                    b.fill({});
                 }
             }
             for (auto& a : butterfly_history) {
                 for (auto& b : a) {
-                    b.fill({0});
+                    b.fill({});
+                }
+            }
+            for (auto& a : continuation_history) {
+                for (auto& b : a) {
+                    b.fill({});
                 }
             }
         }
@@ -65,6 +71,11 @@ namespace Engine {
             for (auto& a : butterfly_history) {
                 for (auto& b : a) {
                     b.fill({0});
+                }
+            }
+            for (auto& a : continuation_history) {
+                for (auto& b : a) {
+                    b.fill({});
                 }
             }
         }
