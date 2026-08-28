@@ -21,7 +21,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #src/Gui/Board.h
 #resources.qrc
 set(ENGINE_NAME "Sashimi")
-set(ENGINE_VERSION "v0.13.5")
+set(ENGINE_VERSION "v0.14.0")
+
+
 
 add_executable(chessEngine
         src/main.cpp
@@ -64,6 +66,9 @@ add_executable(chessEngine
         src/Engine/MovePicker.cpp
         src/Engine/MovePicker.h
 )
+if (MSVC)
+    target_link_options(${PROJECT_NAME} PRIVATE /STACK:16777216)
+endif()
 target_compile_definitions(chessEngine PRIVATE
         ENGINE_NAME="${ENGINE_NAME}"
         ENGINE_VERSION="${ENGINE_VERSION}"

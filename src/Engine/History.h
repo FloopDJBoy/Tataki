@@ -12,6 +12,7 @@
 namespace Engine::History {
     constexpr int BUTTERFLY_MAX = 7200;
     constexpr int CAPTURE_MAX   = 10800;
+    constexpr int CONT_HISTORY_MAX = 30000;
 
     constexpr int BONUS_PER_DEPTH = 150;
     constexpr int BONUS_MAX       = 1500;   // caps at depth 10
@@ -50,7 +51,7 @@ namespace Engine::History {
                   - value * std::abs(bonus) / MAX_VALUE;
         }
     };
-    using ContHistEntry = StatsEntry<Score,30000>;
+    using ContHistEntry = StatsEntry<Score,CONT_HISTORY_MAX>;
     using ButterflyEntry = StatsEntry<Score,7200>;
     using CaptureHistoryEntry = StatsEntry<int16_t, CAPTURE_MAX>;
     //[piece][to][captured piece type]

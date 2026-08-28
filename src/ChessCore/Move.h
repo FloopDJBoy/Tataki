@@ -40,6 +40,7 @@ namespace ChessCore {
             |((static_cast<uint16_t>(promotion) -static_cast<uint16_t>(PieceType::KNIGHT)) << 12)
             |static_cast<uint16_t>(MoveType::PROMOTION));
         }
+
         [[nodiscard]]
         constexpr PieceType promotion_type() const
         {
@@ -53,8 +54,8 @@ namespace ChessCore {
         {
             return static_cast<Square>(data & 0x3F);
         }
-        bool operator==(const Move  m) const {return data == m.data;}
-        bool operator!=(const Move  m) const {return data != m.data;}
+        constexpr bool operator==(const Move  m) const {return data == m.data;}
+        constexpr bool operator!=(const Move  m) const {return data != m.data;}
         [[nodiscard]] std::string to_string() const
         {
             if (data == 0)

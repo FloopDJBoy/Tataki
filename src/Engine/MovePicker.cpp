@@ -16,9 +16,12 @@ namespace Engine {
         s = static_cast<PickStage>(static_cast<int>(s) + 1);
         return s;
     }
-    MovePicker::MovePicker(const ChessCore::Position& p, const ChessCore::Move tt, const int depth ,
-        const History::CaptureHistory& ch,const History::ButterflyHistory& bh,const std::array<ChessCore::Move,2>& killer)
-        : pos(p), tt_move(tt),capture_history(ch),butterfly_history(bh),killers(killer),depth(depth) {
+    MovePicker::MovePicker(const Position& p, const Move tt, const int depth ,
+        const History::CaptureHistory& ch,
+        const History::ButterflyHistory& bh,
+        const std::array<Move,2>& killer,
+        const History::PieceToHistory* const* cont_hist)
+        : pos(p), tt_move(tt),capture_history(ch),butterfly_history(bh),killers(killer),depth(depth),continuation_history(cont_hist) {
         if (pos.checkers()) {
             stage = EVASION_TT;
         }else {
@@ -150,21 +153,23 @@ namespace Engine {
             //const PieceType type = Pieces::getType(moved);
             const PieceType captured_pt =m.get_type() == MoveType::EN_PASSANT? PieceType::PAWN: Pieces::getType(pos.square(m.to()));
             if constexpr (Type == GenType::CAPTURES) {
-                const PieceType attacker_pt = Pieces::getType(moved);
+                //const PieceType attacker_pt = Pieces::getType(moved);
                 m.score = capture_history[moved][to][static_cast<int>(captured_pt)]
-                 + 7 * static_cast<int>(Eval::piece_value(captured_pt));//- static_cast<int>(Eval::piece_value(attacker_pt));
+                 + 7 * Eval::piece_value(captured_pt);
             }else if constexpr (Type == GenType::QUIETS) {
-                m.score = butterfly_history[color_idx(us)][from][to];
+                m.score = butterfly_history[color_idx(us)][from][to]
+                    + (*continuation_history[0])[moved][to]
+                       + (*continuation_history[1])[moved][to];
                 if (m.get_type() == MoveType::PROMOTION)
-                    m.score += 16 * static_cast<int>(Eval::piece_value(m.promotion_type()));
+                    m.score += 16 * Eval::piece_value(m.promotion_type());
                 if (m == killers[0]) m.score += KILLER_BONUS;
                 else if (m == killers[1]) m.score += KILLER_BONUS - 1;
             }else if constexpr (Type == GenType::EVASIONS) {
                 //const PieceType attacker_pt = Pieces::getType(moved);
                 if (pos.is_capture(move)) {
-                    m.score = static_cast<int>(Eval::piece_value(captured_pt)) + (1<<28);
+                    m.score = Eval::piece_value(captured_pt) + (1<<28);
                 } else {
-                    m.score = butterfly_history[color_idx(us)][from][to];
+                    m.score = butterfly_history[color_idx(us)][from][to] + (*continuation_history[0])[moved][to];
                 }
             }
         }

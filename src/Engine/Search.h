@@ -12,7 +12,6 @@
 #include "PawnTT.h"
 #include "SearchLimits.h"
 #include "TranspositionTable.h"
-#include "misc/SearchStats.h"
 
 #define DEBUG_STATS 0
 
@@ -102,9 +101,7 @@ namespace Engine {
 
 
         constexpr static int SEARCHED_LIST_CAPACITY = 32;
-#if DEBUG_STATS
-        SearchStats stats;
-#endif
+
         ChessCore::Position pos;
         uint64_t nodes = 0;
         const SearchLimits limits;
@@ -126,9 +123,10 @@ namespace Engine {
         [[nodiscard]] std::chrono::milliseconds calculate_hard_limit() const;
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
 
-        void update_stats(ChessCore::Move best_move, ChessCore::Move tt_move, int depth,
+        void update_stats(SearchStack* ss,ChessCore::Move best_move, ChessCore::Move tt_move, int depth,
                           const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
-                          const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& captures_searched);
+                          const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& captures_searched) const;
+        static void update_continuation_histories(const SearchStack* ss,Piece moved,Square to,int bonus);
         static int reduction(int depth,int move_count);
 
     public:
@@ -141,15 +139,13 @@ namespace Engine {
             History::ButterflyHistory& butterfly_history,
             History::ContinuationHistory& continuation_history)
         :pos(p.copy_for_search())
-        ,limits(search_limits),tt(t),pawn_tt(pawn_t),
-        capture_history(capture_history),
+        ,limits(search_limits),tt(t),capture_history(capture_history),
         butterfly_history(butterfly_history),
-        continuation_history(continuation_history)
+        continuation_history(continuation_history),
+        pawn_tt(pawn_t)
         {};
         ChessCore::Move find_best_move();
-#if DEBUG_STATS
-        void print_stats() const;
-#endif
+
     };
 } // Engine
 

@@ -58,7 +58,7 @@ namespace UCI {
             }
 
             const bool tt_ok = tt != Move::none() && expected.contains(tt.raw());
-            Engine::MovePicker mp(pos, tt_ok ? tt : Move::none(), depth, ch,bh,killers);
+            Engine::MovePicker mp(pos, tt_ok ? tt : Move::none(), depth, ch,bh,killers,{});
             for (Move m = mp.next_move(); m != Move::none(); m = mp.next_move()) {
                 got[m.raw()]++;
                 label[m.raw()] = m;

@@ -39,7 +39,7 @@ namespace Engine {
     }
 
     template <bool in_check>
-    Score Search::quiesce(Score alpha, Score beta, SearchStack *ss) {
+    Score Search::quiesce(Score alpha, Score beta, SearchStack* ss) {
         assert(ss >= stack);
         assert(ss < stack + std::size(stack));
 #if DEBUG_STATS
@@ -119,8 +119,10 @@ namespace Engine {
         } else {
             best_score = -Eval::INF;
         }
-
-        MovePicker move_picker(pos,tt_move,QSEARCH_DEPTH,capture_history,butterfly_history,ss->killers);
+        const History::PieceToHistory* cont_hist[] = {
+            (ss-1)->continuation_history
+        };
+        MovePicker move_picker(pos,tt_move,QSEARCH_DEPTH,capture_history,butterfly_history,ss->killers,cont_hist);
 
         bool found_move = false;
 
@@ -128,6 +130,11 @@ namespace Engine {
 
             if (pos.legal(move)) {
                 found_move = true;
+
+                ss->current_move         = move;
+                ss->moved_piece          = pos.square(move.from());
+                ss->continuation_history = &continuation_history[ss->moved_piece][move.to()];
+
                 pos.make_move(move);
 
                 Score score = pos.in_check()
@@ -166,9 +173,18 @@ namespace Engine {
         return best_score;
     }
 
-    void Search::update_stats(const Move best_move, const Move tt_move, const int depth,
-                            const DumbVector<Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
-                            const DumbVector<Move, SEARCHED_LIST_CAPACITY>& captures_searched) {
+    void Search::update_continuation_histories(const SearchStack* const ss, const Piece moved, const Square to, const int bonus) {
+        constexpr int weight[] = {0, 1024, 512};      // offset 1 full, offset 2 half
+        for (const int offset : {1, 2}) {
+            const auto m = (ss - offset)->current_move;
+            if (m == Move::none() || m == Move::null() ) continue;
+            (*(ss - offset)->continuation_history)[moved][to].add(bonus * weight[offset] / 1024);
+        }
+    }
+
+    void Search::update_stats(SearchStack* const ss,const Move best_move, const Move tt_move, const int depth,
+                              const DumbVector<Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
+                              const DumbVector<Move, SEARCHED_LIST_CAPACITY>& captures_searched) const {
         const int bonus = History::stat_bonus(depth) + (best_move == tt_move) * History::BONUS_TT_MOVE;
         const int malus = History::stat_malus(depth);
         const Color us  = pos.side_to_move();
@@ -185,8 +201,15 @@ namespace Engine {
             cap_entry(best_move).add(bonus);
         } else {
             butterfly_history[color_idx(us)][best_move.from()][best_move.to()].add(bonus);
-            for (const Move m : quiets_searched)
+            const Piece moved = pos.square(best_move.from());
+            update_continuation_histories(ss,moved,best_move.to(),bonus);
+
+            for (const Move m : quiets_searched) {
+                const Piece p = pos.square(m.from());
                 butterfly_history[color_idx(us)][m.from()][m.to()].add(-malus);
+                update_continuation_histories(ss,p,m.to(),-malus);
+            }
+
         }
 
         for (const Move m : captures_searched)
@@ -200,7 +223,6 @@ namespace Engine {
         ss->pv.clear();
         const bool in_check = pos.in_check();
 
-
         if ((++nodes & 1023) == 0 && should_stop()) stop_search();
         if (stop.load(std::memory_order_relaxed)) return 0;
 
@@ -210,13 +232,13 @@ namespace Engine {
         }
 
         if (depth <= 0) {
-            return in_check ? quiesce<true>(alpha, beta, ss) : quiesce<false>(alpha, beta, ss);
+            return in_check ? quiesce<true>(alpha, beta,ss) : quiesce<false>(alpha,beta,ss);
         }
 
         DumbVector<Move,SEARCHED_LIST_CAPACITY> captured_searched;
         DumbVector<Move,SEARCHED_LIST_CAPACITY> quiets_searched;
         const Key zobrist_key = pos.zobrist_key();
-        const Engine::TTEntry* tt_entry = tt[zobrist_key];
+        const TTEntry* tt_entry = tt[zobrist_key];
 
         Move tt_move = Move::none();
         const Score original_alpha = alpha;
@@ -283,6 +305,10 @@ namespace Engine {
                 && ss->static_eval >= beta //- NMP_MARGIN_PER_DEPTH * depth - NMP_IMPROVING_REDUCTION * improving +NMP_BASE_MARGIN
                 && pos.non_pawn_material(pos.side_to_move())) {
 
+                ss->current_move = Move::null();
+                ss->moved_piece = Pieces::EMPTY;
+                ss->continuation_history = &continuation_history[ss->moved_piece][0];
+
                 pos.make_null_move();
                 const auto null_value = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-beta, -beta + 1, depth - 1 - R, ss + 1));
                 pos.undo_null_move();
@@ -303,8 +329,11 @@ namespace Engine {
             if (auto legal = pos.legal_moves(); !legal.empty())
                 ss->pv.update(legal[0]);   // fallback if we're interrupted before improving alpha
         }
-
-        MovePicker move_picker(pos, tt_move, depth, capture_history,butterfly_history,ss->killers);
+        const History::PieceToHistory* cont_hist[] = {
+            (ss - 1)->continuation_history,
+            (ss-2)->continuation_history,
+        };
+        MovePicker move_picker(pos, tt_move, depth, capture_history,butterfly_history,ss->killers,cont_hist);
         int i = 0;
         const bool fp_ok = !RootNode
                 && !in_check
@@ -324,11 +353,12 @@ namespace Engine {
                 continue;
             }
             tt.prefetch(pos.prefetch_key(move));
+
             ss->current_move = move;
             ss->moved_piece = pos.square(move.from());
+            ss->continuation_history = &continuation_history[ss->moved_piece][move.to()];
+
             pos.make_move(move,gives_check);
-
-
             Score score = -Eval::INF;
             bool full_null_window;
             if (depth>=3 && i>=4 && !capture && !in_check) {
@@ -387,7 +417,7 @@ namespace Engine {
                                                            : Bound::EXACT;
             if constexpr (!RootNode) {
                 if (best_move != Move::none() && best_score > original_alpha)
-                    update_stats(best_move, tt_move, depth,quiets_searched,captured_searched);
+                    update_stats(ss,best_move, tt_move, depth,quiets_searched,captured_searched);
             }
             tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
         }
@@ -465,7 +495,7 @@ namespace Engine {
         if (!root_moves.empty()) {
             best_move = last_best_move = root_moves[0];
         }
-        //forced move no need to think;
+        //forced move no need to think
         if (root_moves.size() == 1 && !limits.infinite && limits.depth == 0 && limits.nodes == 0) {
             return root_moves[0];
         }
@@ -487,8 +517,17 @@ namespace Engine {
                 stop_search();
                 break;
             }
-
+            for (auto& s : stack) {
+                s.continuation_history = &(continuation_history)[Pieces::EMPTY][0];
+                s.current_move         = Move::none();
+                s.static_eval          = Eval::NO_SCORE;
+            }
             SearchStack* ss = stack+7;
+            for (int i = 1; i <= 7; ++i) {
+                (ss - i)->continuation_history = &continuation_history[Pieces::EMPTY][0];
+                (ss - i)->current_move         = Move::none();
+                (ss - i)->static_eval          = Eval::NO_SCORE;
+            }
             const auto [move, score] = search(depth, ss);
             const auto elapsed = std::chrono::duration_cast<Duration>(Clock::now() - start_time);
 
