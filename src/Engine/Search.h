@@ -99,6 +99,9 @@ namespace Engine {
         constexpr static int FP_DEPTH = 8;
         constexpr static Score FP_MARGIN  = 100; //per ply
 
+        constexpr static int LMP_MAX_DEPTH = 8;
+
+
 
         constexpr static int SEARCHED_LIST_CAPACITY = 32;
 

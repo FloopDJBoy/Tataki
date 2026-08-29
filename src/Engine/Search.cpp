@@ -32,6 +32,20 @@ namespace Engine {
             }
         };
         const auto reductions = ReductionTable();
+        constexpr int LMP_MAX_DEPTH = 8;
+        struct MoveCountTable {
+            int c[2][LMP_MAX_DEPTH + 1]{};
+            constexpr MoveCountTable() {
+                for (int d = 0; d <= LMP_MAX_DEPTH; ++d) {
+                    c[0][d] = (3 + d * d) / 2;   // not improving
+                    c[1][d] =  3 + d * d;        // improving
+                }
+            }
+            int operator[](const bool improving, const int depth) const {
+                return c[improving][depth];
+            }
+        };
+        constexpr auto lmp = MoveCountTable();
     }
     int Search::reduction(const int depth, const int move_count) {
         return reductions.r[std::min(depth, ReductionTable::MAX_D - 1)]
@@ -268,7 +282,7 @@ namespace Engine {
             }
         }
 
-        ss->static_eval = in_check? (ss - 2)->static_eval : Eval::evaluate(pos,&pawn_tt,alpha,beta);
+        ss->static_eval = in_check? (ss - 2)->static_eval : Eval::evaluate(pos, &pawn_tt, Eval::NEG_INF, Eval::INF);
         const bool improving = ss->static_eval > (ss - 2)->static_eval;
         //RFP
         if (!PvNode
@@ -342,12 +356,20 @@ namespace Engine {
                 && alpha < Eval::MATE_THRESHOLD
                 && ss->static_eval + FP_MARGIN * depth <= alpha;
 
+        const bool lmp_ok = !RootNode && !in_check && depth <= LMP_MAX_DEPTH;
+
         for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
             if (!pos.legal(move)) continue;
             ++i;
             found_move = true;
             const bool capture = pos.is_capture(move);
             const bool gives_check = pos.gives_check(move);
+            if (lmp_ok && !capture && !gives_check
+                 && best_score > -Eval::MATE_THRESHOLD
+                 && i>= lmp[improving,depth]) {
+                move_picker.skip_quiets();
+                continue;
+            }
             if (fp_ok && i > 1 && !capture && !gives_check) {
                 best_score = static_cast<Score>(std::max( static_cast<int>(best_score), ss->static_eval + FP_MARGIN * depth));
                 move_picker.skip_quiets();
@@ -487,10 +509,11 @@ namespace Engine {
 
         if (depth >= ASP_MIN_DEPTH
             && prev_score != Eval::NO_SCORE
-            && std::abs(static_cast<int>(prev_score)) < Eval::MATE_THRESHOLD) {
+            && std::abs(prev_score) < Eval::MATE_THRESHOLD) {
+
             alpha = std::max(prev_score - delta, -static_cast<int>(Eval::INF));
             beta  = std::min(prev_score + delta,  static_cast<int>(Eval::INF));
-            }
+        }
 
         Move  best_move  = Move::none();
         Score best_score = prev_score;
