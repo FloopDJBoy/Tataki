@@ -271,7 +271,8 @@ namespace Engine {
         ss->static_eval = in_check? (ss - 2)->static_eval : Eval::evaluate(pos,&pawn_tt,alpha,beta);
         const bool improving = ss->static_eval > (ss - 2)->static_eval;
         //RFP
-        if (!in_check
+        if (!PvNode
+            &&!in_check
             && depth <= RFP_MAX_DEPTH
             && (tt_move == Move::none() || pos.is_capture(tt_move))
             && beta > -Eval::MATE_THRESHOLD          // beta isn't already a near-mate loosing score
@@ -479,10 +480,49 @@ namespace Engine {
         }
         return false;
     }
-    SearchResult Search::search(const int depth, SearchStack* ss) {
-        const Score score = alpha_beta<NodeType::Root>(-Eval::INF, Eval::INF, depth, ss);
-        const Move move = ss->pv.empty() ? Move::none() : ss->pv[0];
-        return { .move = move, .score = score };
+    SearchResult Search::search(const int depth, SearchStack* ss, const Score prev_score) {
+        int alpha = -Eval::INF;
+        int beta  =  Eval::INF;
+        int delta =  ASP_INIT_DELTA;
+
+        if (depth >= ASP_MIN_DEPTH
+            && prev_score != Eval::NO_SCORE
+            && std::abs(static_cast<int>(prev_score)) < Eval::MATE_THRESHOLD) {
+            alpha = std::max(prev_score - delta, -static_cast<int>(Eval::INF));
+            beta  = std::min(prev_score + delta,  static_cast<int>(Eval::INF));
+            }
+
+        Move  best_move  = Move::none();
+        Score best_score = prev_score;
+
+        while (true) {
+            const Score score = alpha_beta<NodeType::Root>(
+                static_cast<Score>(alpha), static_cast<Score>(beta), depth, ss);
+
+            // A stopped search returns 0 with a garbage PV. Hand back only what
+            // we already trusted at this depth (may be Move::none()).
+            if (stop.load(std::memory_order_relaxed))
+                return { .move = best_move, .score = best_score };
+
+            if (score <= alpha) {
+                // Fail low: alpha was never raised, so ss->pv is still just the
+                // legal[0] fallback, not a real best move. Don't touch best_move.
+                beta  = (alpha + beta) / 2;                 // pull beta in as well
+                alpha = std::max(score - delta, -static_cast<int>(Eval::INF));
+            } else if (score >= beta) {
+                // Fail high: we really did find a move beating beta, it's usable.
+                beta = std::min(score + delta, static_cast<int>(Eval::INF));
+                if (!ss->pv.empty()) {
+                    best_move  = ss->pv[0];
+                    best_score = score;
+                }
+            } else {
+                return { .move = ss->pv.empty() ? best_move : ss->pv[0], .score = score };
+            }
+
+            delta += delta / 2;                             // 1.5x growth
+            if (delta > ASP_MAX_DELTA) { alpha = -Eval::INF; beta = Eval::INF; }
+        }
     }
     Move Search::find_best_move() {
 
@@ -508,6 +548,7 @@ namespace Engine {
             : Clock::now() + calculate_hard_limit();
 
         int stability = 0;
+        Score prev_score = Eval::NO_SCORE;
 
 
         constexpr std::array STABILITY_SCALE = {1.30, 1.15, 1.00, 0.90, 0.80}; // placeholder table, indexed by min(stability,4)
@@ -528,7 +569,7 @@ namespace Engine {
                 (ss - i)->current_move         = Move::none();
                 (ss - i)->static_eval          = Eval::NO_SCORE;
             }
-            const auto [move, score] = search(depth, ss);
+            const auto [move, score] = search(depth, ss,prev_score);
             const auto elapsed = std::chrono::duration_cast<Duration>(Clock::now() - start_time);
 
             const auto time_ms = std::max<int64_t>(1, elapsed.count());
@@ -537,7 +578,7 @@ namespace Engine {
             if (stop.load(std::memory_order_relaxed)) {
                 return best_move;
             }
-
+            prev_score = score;
             if (move != Move::none()) {
                 if (move == last_best_move) {
                     stability = std::min(stability + 1, 4);
@@ -548,6 +589,7 @@ namespace Engine {
                 }
                 best_move = move;
             }
+
 
             std::cout << "info depth " << depth;
 

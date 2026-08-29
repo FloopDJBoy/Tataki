@@ -21,7 +21,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #src/Gui/Board.h
 #resources.qrc
 set(ENGINE_NAME "Sashimi")
-set(ENGINE_VERSION "v0.14.0")
+set(ENGINE_VERSION "v0.15.0")
 
 
 

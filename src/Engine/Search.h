@@ -102,6 +102,10 @@ namespace Engine {
 
         constexpr static int SEARCHED_LIST_CAPACITY = 32;
 
+        constexpr static int   ASP_MIN_DEPTH  = 4;    // full window below this
+        constexpr static Score ASP_INIT_DELTA = 25;   // ~0.25 pawns
+        constexpr static Score ASP_MAX_DELTA  = 500;  // stop widening, go full width
+
         ChessCore::Position pos;
         uint64_t nodes = 0;
         const SearchLimits limits;
@@ -118,7 +122,7 @@ namespace Engine {
         [[nodiscard]] bool should_stop() const;
         template <bool in_check>
         [[nodiscard]] Score quiesce(Score alpha, Score beta,SearchStack* ss);
-        [[nodiscard]]SearchResult search(int depth,SearchStack* ss);
+        [[nodiscard]] SearchResult search(int depth, SearchStack* ss, Score prev_score);
         [[nodiscard]] std::chrono::milliseconds calculate_soft_limit() const;
         [[nodiscard]] std::chrono::milliseconds calculate_hard_limit() const;
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
