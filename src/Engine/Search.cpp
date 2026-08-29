@@ -385,7 +385,7 @@ namespace Engine {
             Score score = -Eval::INF;
             bool full_null_window;
             if (depth>=3 && i>=4 && !capture && !in_check) {
-                const int r = reduction(depth,i);
+                const int r = reduction(depth, i) + 512 - improving * 1024;
                 const int d = std::clamp(depth - 1  - (r  / 1024), 1, depth -1);
                 score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, d, ss + 1));
                 full_null_window = (score > alpha && d < depth -1);
