@@ -120,7 +120,7 @@ namespace ChessCore {
         [[nodiscard]] bool is_insufficient_material() const;
         [[nodiscard]] BitBoard pinners(const Color c) const {return state().pinners[color_idx(c)];}
         [[nodiscard]] Key prefetch_key(Move move) const;
-        [[nodiscard]] bool is_draw() const {return is_3fold() || state().half_clock>=100 || is_insufficient_material();}
+        [[nodiscard]] bool is_draw() const {return is_3fold() || (state().half_clock>=100 && (!in_check() || !MoveGen::MoveList<MoveGen::GenType::LEGAL>(*this).empty())) || is_insufficient_material();}
         [[nodiscard]] bool is_capture(const Move move) const {
             const MoveType mt = move.get_type();
             if (mt == MoveType::NORMAL) {

@@ -195,7 +195,7 @@ namespace Engine::Eval {
 
         if (lazy_eval >= static_cast<int>(beta) + LAZY_EVAL_MARGIN ||
             lazy_eval <= static_cast<int>(alpha) - LAZY_EVAL_MARGIN) {
-            return lazy_eval; // mobility can't swing this far - skip the expensive part
+            return lazy_eval;
         }
 
         // Expensive: only reached when the position is actually close to the window.

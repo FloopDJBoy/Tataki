@@ -123,7 +123,7 @@ namespace Engine {
         template<NodeType node_type>
         Score alpha_beta(Score alpha, Score beta,int depth,SearchStack* ss);
         [[nodiscard]] bool should_stop() const;
-        template <bool in_check>
+        template <bool in_check,NodeType node_type>
         [[nodiscard]] Score quiesce(Score alpha, Score beta,SearchStack* ss);
         [[nodiscard]] SearchResult search(int depth, SearchStack* ss, Score prev_score);
         [[nodiscard]] std::chrono::milliseconds calculate_soft_limit() const;

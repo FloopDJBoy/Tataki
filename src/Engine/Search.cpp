@@ -52,14 +52,16 @@ namespace Engine {
                           [std::min(move_count, ReductionTable::MAX_M - 1)];
     }
 
-    template <bool in_check>
+    template <bool in_check,NodeType node_type>
     Score Search::quiesce(Score alpha, Score beta, SearchStack* ss) {
+        constexpr bool PvNode   = node_type != NodeType::NonPV;
+        constexpr bool RootNode = node_type == NodeType::Root;
         assert(ss >= stack);
         assert(ss < stack + std::size(stack));
-#if DEBUG_STATS
-        ++stats.qnodes;
-#endif
-        ss->pv.clear();
+        assert(node_type != NodeType::Root);
+        if (PvNode) {
+            ss->pv.clear();
+        }
 
         if ((++nodes & 1023) == 0 && should_stop()) {
             stop_search();
@@ -75,54 +77,29 @@ namespace Engine {
             return 0;
         }
         Score best_score;
-//        Move best_move = Move::none();
-//         const Key zobrist_key = pos.zobrist_key();
-//         const auto tt_entry = tt[zobrist_key];
-         constexpr  Move tt_move = Move::none();
-//         if (tt_entry) {
-//             const Score tt_score =TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
-//
-// #if DEBUG_STATS
-//             stats.tt_hits++;
-// #endif
-//
-//             // Always use TT move for move ordering, regardless of depth.
-//             if (tt_entry->best_move != Move::none()) {
-//                 tt_move = tt_entry->best_move;
-//             }
-//
-//             if (tt_entry->depth >= QSEARCH_DEPTH) {
-// #if DEBUG_STATS
-//                 stats.tt_depth_sufficient++;
-// #endif
-//
-//                 if (tt_entry->bound == (tt_score >= beta ? Bound::LOWER : Bound::UPPER))
-//                 {
-// #if DEBUG_STATS
-//                     stats.tt_cutoffs++;
-//                     if (tt_score >= beta)
-//                         stats.tt_lower_cutoffs++;
-//                     else
-//                         stats.tt_upper_cutoffs++;
-// #endif
-//
-//                     if (tt_move != Move::none()) {
-//                         ss->pv.update(tt_move);
-//                     }
-//
-//                     return tt_score;
-//                 }
-//             }
-//         }
+        Move tt_move  = Move::none();
+        const Key zobrist_key = pos.zobrist_key();
+        const auto tt_entry = tt[zobrist_key];
+        Move best_move = Move::none();
+        if (tt_entry) {
+            if (tt_entry->best_move != Move::none()) tt_move = tt_entry->best_move;
+            if constexpr (!PvNode) {
+                if (tt_entry->depth >= QSEARCH_DEPTH) {
+                    const Score tt_score = TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
+                    switch (tt_entry->bound()) {
+                        case Bound::EXACT: return tt_score;
+                        case Bound::LOWER: if (tt_score >= beta)  return tt_score; break;
+                        case Bound::UPPER: if (tt_score <= alpha) return tt_score; break;
+                    }
+                }
+            }
+        }
         if constexpr (!in_check) {
             const Score stand_pat = Eval::evaluate(pos,&pawn_tt,alpha,beta);
-#if DEBUG_STATS
-            ++stats.eval_calls;
-#endif
-
-
             if (stand_pat >= beta) {
-                //tt.insert(zobrist_key,TranspositionTable::value_to_tt(stand_pat, pos.ply()),QSEARCH_DEPTH,Move::none(),Bound::LOWER);
+                if (!tt_entry) {
+                    tt.insert(zobrist_key,TranspositionTable::value_to_tt(stand_pat, pos.ply()),QSEARCH_DEPTH,Move::none(),Bound::LOWER,false);
+                }
                 return stand_pat;
             }
 
@@ -144,7 +121,7 @@ namespace Engine {
 
             if (pos.legal(move)) {
                 found_move = true;
-
+                tt.prefetch(pos.prefetch_key(move));
                 ss->current_move         = move;
                 ss->moved_piece          = pos.square(move.from());
                 ss->continuation_history = &continuation_history[ss->moved_piece][move.to()];
@@ -152,8 +129,8 @@ namespace Engine {
                 pos.make_move(move);
 
                 Score score = pos.in_check()
-                    ? static_cast<Score>(-quiesce<true>(-beta, -alpha, ss + 1))
-                    : static_cast<Score>(-quiesce<false>(-beta, -alpha, ss + 1));
+                    ? static_cast<Score>(-quiesce<true,node_type>(-beta, -alpha, ss + 1))
+                    : static_cast<Score>(-quiesce<false,node_type>(-beta, -alpha, ss + 1));
 
                 pos.undo_move();
                 if (stop.load(std::memory_order_relaxed)) {
@@ -162,11 +139,13 @@ namespace Engine {
 
                 if (score > best_score) {
                     best_score = score;
-                    //best_move = move;
 
                     if (score > alpha) {
+                        best_move = move;
                         alpha = score;
-                        ss->pv.update(move, (ss + 1)->pv);
+                        if (PvNode) {
+                            ss->pv.update(move, (ss + 1)->pv);
+                        }
                     }
                 }
 
@@ -180,10 +159,10 @@ namespace Engine {
                 return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
             }
         }
-        // if (!stop.load(std::memory_order_relaxed)) {
-        //     const Bound bound = best_score >= beta ? Bound::LOWER : Bound::UPPER;
-        //     //tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), QSEARCH_DEPTH, best_move, bound);
-        // }
+        if (!stop.load(std::memory_order_relaxed)) {
+            const Bound bound = best_score >= beta ? Bound::LOWER : Bound::UPPER;
+            tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), QSEARCH_DEPTH, best_move, bound,false);
+        }
         return best_score;
     }
 
@@ -234,7 +213,9 @@ namespace Engine {
         constexpr bool PvNode   = node_type != NodeType::NonPV;
         constexpr bool RootNode = node_type == NodeType::Root;
 
-        ss->pv.clear();
+        if constexpr (PvNode) {
+            ss->pv.clear();
+        }
         const bool in_check = pos.in_check();
 
         if ((++nodes & 1023) == 0 && should_stop()) stop_search();
@@ -246,7 +227,8 @@ namespace Engine {
         }
 
         if (depth <= 0) {
-            return in_check ? quiesce<true>(alpha, beta,ss) : quiesce<false>(alpha,beta,ss);
+            constexpr NodeType qs_type = PvNode ? NodeType::PV : NodeType::NonPV;
+            return in_check ? quiesce<true,qs_type>(alpha, beta,ss) : quiesce<false,qs_type>(alpha,beta,ss);
         }
 
         DumbVector<Move,SEARCHED_LIST_CAPACITY> captured_searched;
@@ -258,7 +240,7 @@ namespace Engine {
         const Score original_alpha = alpha;
 
         if (tt_entry) {
-            ss->ttPv = PvNode || tt_entry->is_pv();
+            ss->ttPv = PvNode || (tt_entry && tt_entry->is_pv());
             if (tt_entry->best_move != Move::none()) tt_move = tt_entry->best_move;
 
             if constexpr (!RootNode) {
@@ -408,7 +390,9 @@ namespace Engine {
                 if (score > alpha) {
                     best_move = move;
                     alpha = score;
-                    ss->pv.update(move, (ss + 1)->pv);
+                    if constexpr (PvNode) {
+                        ss->pv.update(move, (ss + 1)->pv);
+                    }
                 }
             }
             if (move != best_move && i <= SEARCHED_LIST_CAPACITY) {

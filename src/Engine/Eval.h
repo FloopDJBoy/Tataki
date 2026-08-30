@@ -307,6 +307,11 @@ namespace Engine::Eval {
     inline ScorePair evaluate_piece(const Piece piece, const Square s){
         return PSQT[piece][s];
     }
+    constexpr int RULE50_DAMP = 212;
+
+    static int damp(const int v, const int half_clock) {
+        return v - v * std::min(half_clock, 100) / RULE50_DAMP;
+    }
 
     constexpr Value piece_value(const PieceType piece) {
         return Capture_Piece_Value[static_cast<int>(piece)];
