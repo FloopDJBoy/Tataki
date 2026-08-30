@@ -119,39 +119,49 @@ namespace Engine {
 
         for (Move move = move_picker.next_move();move != Move::none();move = move_picker.next_move()) {
 
-            if (pos.legal(move)) {
-                found_move = true;
-                tt.prefetch(pos.prefetch_key(move));
-                ss->current_move         = move;
-                ss->moved_piece          = pos.square(move.from());
-                ss->continuation_history = &continuation_history[ss->moved_piece][move.to()];
+            if (!pos.legal(move)) {
+                continue;
+            }
+            found_move = true;
+            tt.prefetch(pos.prefetch_key(move));
+            ss->current_move         = move;
+            ss->moved_piece          = pos.square(move.from());
+            ss->continuation_history = &continuation_history[ss->moved_piece][move.to()];
 
-                pos.make_move(move);
 
-                Score score = pos.in_check()
-                    ? static_cast<Score>(-quiesce<true,node_type>(-beta, -alpha, ss + 1))
-                    : static_cast<Score>(-quiesce<false,node_type>(-beta, -alpha, ss + 1));
+            // Do not search moves with bad enough SEE values.
+            // Never prune in check
+            if constexpr (!in_check) {
+                if (!pos.see_ge(move, QS_SEE_MARGIN))
+                    continue;
+            }
 
-                pos.undo_move();
-                if (stop.load(std::memory_order_relaxed)) {
-                    return 0;
-                }
 
-                if (score > best_score) {
-                    best_score = score;
+            pos.make_move(move);
 
-                    if (score > alpha) {
-                        best_move = move;
-                        alpha = score;
-                        if (PvNode) {
-                            ss->pv.update(move, (ss + 1)->pv);
-                        }
+            Score score = pos.in_check()
+                ? static_cast<Score>(-quiesce<true,node_type>(-beta, -alpha, ss + 1))
+                : static_cast<Score>(-quiesce<false,node_type>(-beta, -alpha, ss + 1));
+
+            pos.undo_move();
+            if (stop.load(std::memory_order_relaxed)) {
+                return 0;
+            }
+
+            if (score > best_score) {
+                best_score = score;
+
+                if (score > alpha) {
+                    best_move = move;
+                    alpha = score;
+                    if (PvNode) {
+                        ss->pv.update(move, (ss + 1)->pv);
                     }
                 }
+            }
 
-                if (alpha >= beta) {
-                    break;
-                }
+            if (alpha >= beta) {
+                break;
             }
         }
         if constexpr (in_check) {
@@ -280,7 +290,7 @@ namespace Engine {
             if (improving) margin -= RFP_IMPROVING_REDUCTION;
 
             if (ss->static_eval - margin >= beta)
-                return ss->static_eval; // fail-soft; the (eval+beta)/2-style tweaks are a later tuning knob
+                return ss->static_eval; // fail-soft; wiki says (eval+beta)/2 but it isn't playing better
         }
 
         if (!RootNode && tt_move == Move::none() && depth >= IIR_MIN_DEPTH) {
@@ -289,7 +299,7 @@ namespace Engine {
 
         if constexpr (!PvNode) {
             constexpr int   NMP_MIN_DEPTH           = 3;
-            constexpr Score NMP_BASE_MARGIN         = 150;  // flat, dominant term
+            constexpr Score NMP_BASE_MARGIN         = 150;
             constexpr Score NMP_MARGIN_PER_DEPTH    = 10;
             constexpr Score NMP_IMPROVING_REDUCTION = 25;
             constexpr int   R                       = 3;

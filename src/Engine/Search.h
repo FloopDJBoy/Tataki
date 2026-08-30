@@ -112,6 +112,7 @@ namespace Engine {
         ChessCore::Position pos;
         uint64_t nodes = 0;
         const SearchLimits limits;
+        constexpr static int QS_SEE_MARGIN = -74;
         constexpr static int search_time_margin=100;
         std::atomic_bool stop{false};
         SearchStack stack[PV::MAX_PLY + 10]{};
