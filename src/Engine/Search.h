@@ -109,10 +109,13 @@ namespace Engine {
         constexpr static Score ASP_INIT_DELTA = 25;   // ~0.25 pawns
         constexpr static Score ASP_MAX_DELTA  = 500;  // stop widening, go full width
 
+        constexpr static int QS_SEE_MARGIN = -74;
+
+        constexpr static int SEE_CAPTURE_MARGIN = 177;
+        constexpr static int SEE_QUIET_MARGIN = 23;
         ChessCore::Position pos;
         uint64_t nodes = 0;
         const SearchLimits limits;
-        constexpr static int QS_SEE_MARGIN = -74;
         constexpr static int search_time_margin=100;
         std::atomic_bool stop{false};
         SearchStack stack[PV::MAX_PLY + 10]{};
@@ -131,7 +134,7 @@ namespace Engine {
         [[nodiscard]] std::chrono::milliseconds calculate_hard_limit() const;
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
 
-        void update_stats(SearchStack* ss,ChessCore::Move best_move, ChessCore::Move tt_move, int depth,
+        void update_stats(const SearchStack* ss,ChessCore::Move best_move, ChessCore::Move tt_move, int depth,
                           const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
                           const DumbVector<ChessCore::Move, SEARCHED_LIST_CAPACITY>& captures_searched) const;
         static void update_continuation_histories(const SearchStack* ss,Piece moved,Square to,int bonus);

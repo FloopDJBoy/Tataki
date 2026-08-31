@@ -185,7 +185,7 @@ namespace Engine {
         }
     }
 
-    void Search::update_stats(SearchStack* const ss,const Move best_move, const Move tt_move, const int depth,
+    void Search::update_stats(const SearchStack* const ss,const Move best_move, const Move tt_move, const int depth,
                               const DumbVector<Move, SEARCHED_LIST_CAPACITY>& quiets_searched,
                               const DumbVector<Move, SEARCHED_LIST_CAPACITY>& captures_searched) const {
         const int bonus = History::stat_bonus(depth) + (best_move == tt_move) * History::BONUS_TT_MOVE;
@@ -349,6 +349,7 @@ namespace Engine {
                 && ss->static_eval + FP_MARGIN * depth <= alpha;
 
         const bool lmp_ok = !RootNode && !in_check && depth <= LMP_MAX_DEPTH;
+        const bool see_ok = !RootNode && !in_check && pos.non_pawn_material(pos.side_to_move());
 
         for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
             if (!pos.legal(move)) continue;
@@ -356,6 +357,17 @@ namespace Engine {
             found_move = true;
             const bool capture = pos.is_capture(move);
             const bool gives_check = pos.gives_check(move);
+            if (see_ok && best_score > -Eval::MATE_THRESHOLD) {
+                if (capture || gives_check) {
+                    if (!pos.see_ge(move, -SEE_CAPTURE_MARGIN * depth))
+                        continue;
+                } else {
+                    const int r = reduction(depth, i) + 512 - improving * 1024;
+                    const int lmr_depth = std::max(depth - 1 - r / 1024, 0);
+                    if (!pos.see_ge(move, -SEE_QUIET_MARGIN * lmr_depth * lmr_depth))
+                        continue;
+                }
+            }
             if (lmp_ok && !capture && !gives_check
                  && best_score > -Eval::MATE_THRESHOLD
                  && i>= lmp[improving,depth]) {
