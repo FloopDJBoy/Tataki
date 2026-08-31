@@ -350,6 +350,7 @@ namespace Engine {
 
         const bool lmp_ok = !RootNode && !in_check && depth <= LMP_MAX_DEPTH;
         const bool see_ok = !RootNode && !in_check && pos.non_pawn_material(pos.side_to_move());
+        const bool hp_ok = !PvNode && !in_check && pos.non_pawn_material(pos.side_to_move()); //&& depth <= HP_MAX_DEPTH;
 
         for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
             if (!pos.legal(move)) continue;
@@ -357,6 +358,27 @@ namespace Engine {
             found_move = true;
             const bool capture = pos.is_capture(move);
             const bool gives_check = pos.gives_check(move);
+            if (lmp_ok && !capture && !gives_check
+                && best_score > -Eval::MATE_THRESHOLD
+                && i>= lmp[improving,depth]) {
+                move_picker.skip_quiets();
+                continue;
+            }
+            if (fp_ok && i > 1 && !capture && !gives_check) {
+                best_score = static_cast<Score>(std::max( static_cast<int>(best_score), ss->static_eval + FP_MARGIN * depth));
+                move_picker.skip_quiets();
+                continue;
+            }
+            if (hp_ok && !capture && !gives_check && best_score > -Eval::MATE_THRESHOLD) {
+                assert(best_score != -Eval::INF);
+                const Piece  moved = pos.square(move.from());
+                const Square to    = move.to();
+                const int hist = (*cont_hist[0])[moved][to]
+                               + (*cont_hist[1])[moved][to];
+                if (hist < -HP_MARGIN * depth) {
+                    continue;
+                }
+            }
             if (see_ok && best_score > -Eval::MATE_THRESHOLD) {
                 if (capture || gives_check) {
                     if (!pos.see_ge(move, -SEE_CAPTURE_MARGIN * depth))
@@ -367,17 +389,6 @@ namespace Engine {
                     if (!pos.see_ge(move, -SEE_QUIET_MARGIN * lmr_depth * lmr_depth))
                         continue;
                 }
-            }
-            if (lmp_ok && !capture && !gives_check
-                 && best_score > -Eval::MATE_THRESHOLD
-                 && i>= lmp[improving,depth]) {
-                move_picker.skip_quiets();
-                continue;
-            }
-            if (fp_ok && i > 1 && !capture && !gives_check) {
-                best_score = static_cast<Score>(std::max( static_cast<int>(best_score), ss->static_eval + FP_MARGIN * depth));
-                move_picker.skip_quiets();
-                continue;
             }
             tt.prefetch(pos.prefetch_key(move));
 
@@ -450,7 +461,7 @@ namespace Engine {
             }
             tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
         }
-
+        assert(best_score != -Eval::INF);
         return best_score;
     }
 

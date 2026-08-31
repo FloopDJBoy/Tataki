@@ -90,29 +90,41 @@ namespace Engine {
         }
     };
     class Search {
+        //not tuned
         constexpr static int   RFP_MAX_DEPTH           = 8;
         constexpr static Score RFP_MARGIN_PER_DEPTH    = 80;
         constexpr static Score RFP_IMPROVING_REDUCTION = 60;
 
+        //not tuned
         constexpr static int IIR_MIN_DEPTH = 4;
 
+        //not tuned
         constexpr static int FP_DEPTH = 8;
         constexpr static Score FP_MARGIN  = 100; //per ply
 
+        //not tuned
         constexpr static int LMP_MAX_DEPTH = 8;
 
 
 
         constexpr static int SEARCHED_LIST_CAPACITY = 32;
 
+        //not tuned
         constexpr static int   ASP_MIN_DEPTH  = 4;    // full window below this
         constexpr static Score ASP_INIT_DELTA = 25;   // ~0.25 pawns
         constexpr static Score ASP_MAX_DELTA  = 500;  // stop widening, go full width
 
+        //not tuned
         constexpr static int QS_SEE_MARGIN = -74;
 
+        //not tuned
         constexpr static int SEE_CAPTURE_MARGIN = 177;
         constexpr static int SEE_QUIET_MARGIN = 23;
+
+        //not tuned
+        constexpr static int HP_MAX_DEPTH = 6; //not used
+        constexpr static int HP_MARGIN    = 3000;
+
         ChessCore::Position pos;
         uint64_t nodes = 0;
         const SearchLimits limits;

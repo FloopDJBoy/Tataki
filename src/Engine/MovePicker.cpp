@@ -142,7 +142,7 @@ namespace Engine {
     ScoredMove* MovePicker::score(const MoveList<Type>& movelist) {
         static_assert(Type == GenType::CAPTURES || Type == GenType::QUIETS || Type == GenType::EVASIONS);
         constexpr int KILLER_BONUS = 1 << 16;   // 65536
-        const Color us = pos.side_to_move(),them = ~us;
+        const Color us = pos.side_to_move(),them [[maybe_unused]] = ~us;
         ScoredMove* it = cur;
         for (const Move move : movelist) {
             ScoredMove& m = *it++;
