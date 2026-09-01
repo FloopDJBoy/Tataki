@@ -14,10 +14,6 @@ namespace Engine::Eval {
     static constexpr Square mirror(const Square s) {
         return s ^ 56;
     }
-    static int interpolate(const ScorePair score,const int mg_weight) {
-        const int eg_weight = MAX_PHASE - mg_weight;
-        return (score.mg * mg_weight + score.eg * eg_weight) / Eval::MAX_PHASE;
-    }
     Value pst_value(const Piece piece,const Square s, const bool eg) {
         const bool should_mirror = Pieces::getColor(piece) != Color::WHITE;
         PieceType type = Pieces::getType(piece);
@@ -164,7 +160,7 @@ namespace Engine::Eval {
     }
     constexpr ScorePair MOBILITY_SWING = mobility_max_swing();
     // +2 covers integer-division truncation during mg/eg interpolation.
-    constexpr Score LAZY_EVAL_MARGIN = 332; //98.5% coverage. made using LazyTuning::run_lazy_tuning(edp_file)
+    constexpr Score LAZY_EVAL_MARGIN = 715; //98.5% coverage. made using LazyTuning::run_lazy_tuning(edp_file)
     Score evaluate(const Position& pos) {
         return evaluate(pos,nullptr,NEG_INF, INF); // no window context -> always full eval
     }
@@ -179,6 +175,8 @@ namespace Engine::Eval {
         // Cheap: material_score is already tracked incrementally in make_move/undo_move.
         const int  lazy_w = interpolate(mat_w,mg_weight);
         const int  lazy_b = interpolate(mat_b,mg_weight);
+        const int tempo = interpolate(TEMPO_BONUS,mg_weight);
+        const int w_tempo = pos.side_to_move() == Color::WHITE? tempo : -tempo;
         ScorePair pawn_score{0,0};
         int final_pawn = 0;
         const PawnEntry* pawn_entry= nullptr;
@@ -189,7 +187,7 @@ namespace Engine::Eval {
                 final_pawn = interpolate(pawn_score,mg_weight);
             }
         }
-        const int lazy_diff = lazy_w - lazy_b + final_pawn;
+        const int lazy_diff = lazy_w - lazy_b + final_pawn + w_tempo;
 
         const auto lazy_eval = static_cast<Score>(pos.side_to_move() == Color::WHITE ? lazy_diff : -lazy_diff);
 
@@ -232,7 +230,7 @@ namespace Engine::Eval {
                 pawn_tt->insert(pawn_key,pawn_score);
             }
         }
-        const int evaluation = (final_w - final_b) + final_pawn;
+        const int evaluation = (final_w - final_b) + final_pawn + w_tempo;
         return static_cast<Score>(pos.side_to_move() == Color::WHITE ? evaluation : -evaluation);
     }
 } // Engine

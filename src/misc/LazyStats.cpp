@@ -40,9 +40,12 @@ namespace Engine::LazyTuning {
         const auto& mat_w = mat[color_idx(Color::WHITE)];
         const auto& mat_b = mat[color_idx(Color::BLACK)];
 
+        const int tempo = Eval::interpolate(Eval::TEMPO_BONUS,mg_weight);
+        const int w_tempo = pos.side_to_move() == Color::WHITE? tempo : -tempo;
+
         const int lazy_w = (mat_w.mg * mg_weight + mat_w.eg * eg_weight) / Engine::Eval::MAX_PHASE;
         const int lazy_b = (mat_b.mg * mg_weight + mat_b.eg * eg_weight) / Engine::Eval::MAX_PHASE;
-        const int lazy_diff = lazy_w - lazy_b;
+        const int lazy_diff = lazy_w - lazy_b + w_tempo;
         const int lazy_eval = (pos.side_to_move() == Color::WHITE) ? lazy_diff : -lazy_diff;
 
         // 2. Force Full Evaluation (Pass wide window to bypass lazy cutoff)

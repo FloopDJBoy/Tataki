@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     //s1 += " v0.3.0";
     //std::string s2 = ENGINE_NAME;
     //s2 += " v0.2.7";
-    //const std::string edp = R"(E:\ChessEngine\assets\quiet-labeled.epd)";
+    //const std::string edp = R"(E:\lichess-big3-resolved\lichess-big3-resolved.book)";
     //Engine::LazyTuning::run_lazy_tuning(edp);
     UCI::loop();
     return 0;
