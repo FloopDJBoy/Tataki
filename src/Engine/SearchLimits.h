@@ -13,6 +13,7 @@ namespace Engine {
         int mate = 0;               // go mate N
         int movetime_ms = 0;        // go movetime N
         uint64_t nodes = 0;         // go nodes N
+        uint64_t nodes_soft = 0;
 
         int wtime_ms = 0;
         int btime_ms = 0;

@@ -203,6 +203,8 @@ namespace UCI {
                 }
                 else if (token == "mate") {
                     ss >> limits.mate;
+                }else if (token == "nodessoft") {
+                    ss >> limits.nodes_soft;
                 }
                 else if (token == "infinite") {
                     limits.infinite = true;

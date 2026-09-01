@@ -228,6 +228,11 @@ namespace Engine {
         }
         const bool in_check = pos.in_check();
 
+        if (depth <= 0) {
+            constexpr NodeType qs_type = PvNode ? NodeType::PV : NodeType::NonPV;
+            return in_check ? quiesce<true,qs_type>(alpha, beta,ss) : quiesce<false,qs_type>(alpha,beta,ss);
+        }
+
         if ((++nodes & 1023) == 0 && should_stop()) stop_search();
         if (stop.load(std::memory_order_relaxed)) return 0;
 
@@ -236,27 +241,32 @@ namespace Engine {
             if (pos.is_draw()) return 0;
         }
 
-        if (depth <= 0) {
-            constexpr NodeType qs_type = PvNode ? NodeType::PV : NodeType::NonPV;
-            return in_check ? quiesce<true,qs_type>(alpha, beta,ss) : quiesce<false,qs_type>(alpha,beta,ss);
-        }
 
         DumbVector<Move,SEARCHED_LIST_CAPACITY> captured_searched;
         DumbVector<Move,SEARCHED_LIST_CAPACITY> quiets_searched;
         const Key zobrist_key = pos.zobrist_key();
+        const Move excluded = ss->excluded;
         const TTEntry* tt_entry = tt[zobrist_key];
 
-        Move tt_move = Move::none();
+        Move    tt_move  = Move::none();
+        Score   tt_score = Eval::NO_SCORE;
+        int16_t tt_depth = -1;
+        auto tt_bound = Bound::UPPER;
+        const bool tt_hit = tt_entry != nullptr;
+
+        ss->ttPv = PvNode || (tt_hit && tt_entry->is_pv());
+
         const Score original_alpha = alpha;
 
-        if (tt_entry) {
-            ss->ttPv = PvNode || (tt_entry && tt_entry->is_pv());
-            if (tt_entry->best_move != Move::none()) tt_move = tt_entry->best_move;
+        if (tt_hit) {
+            tt_move  = tt_entry->best_move;
+            tt_score = TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
+            tt_depth = tt_entry->depth;
+            tt_bound = tt_entry->bound();
 
-            if constexpr (!RootNode) {
-                if (tt_entry->depth >= depth) {
-                    const Score tt_score = TranspositionTable::value_from_tt(tt_entry->score, pos.ply());
-                    switch (tt_entry->bound()) {
+            if (!PvNode && excluded == Move::none()) {
+                if (tt_depth >= depth) {
+                    switch (tt_bound) {
                         case Bound::EXACT:
                             if (tt_move != Move::none()) ss->pv.update(tt_move);
                             return tt_score;
@@ -278,6 +288,7 @@ namespace Engine {
         const bool improving = ss->static_eval > (ss - 2)->static_eval;
         //RFP
         if (!PvNode
+            && excluded == Move::none()
             &&!in_check
             && depth <= RFP_MAX_DEPTH
             && (tt_move == Move::none() || pos.is_capture(tt_move))
@@ -293,10 +304,6 @@ namespace Engine {
                 return ss->static_eval; // fail-soft; wiki says (eval+beta)/2 but it isn't playing better
         }
 
-        if (!RootNode && tt_move == Move::none() && depth >= IIR_MIN_DEPTH) {
-            --depth;
-        }
-
         if constexpr (!PvNode) {
             constexpr int   NMP_MIN_DEPTH           = 3;
             constexpr Score NMP_BASE_MARGIN         = 150;
@@ -305,6 +312,7 @@ namespace Engine {
             constexpr int   R                       = 3;
 
             if (!in_check
+                && excluded == Move::none()
                 && depth >= NMP_MIN_DEPTH
                 && pos.previous().move != Move::null()
                 && beta > -Eval::MATE_THRESHOLD
@@ -325,6 +333,9 @@ namespace Engine {
                 if (null_value >= beta)
                     return null_value < Eval::MATE_THRESHOLD ? null_value : beta;
                 }
+        }
+        if (!RootNode && tt_move == Move::none() && depth >= IIR_MIN_DEPTH) {
+            --depth;
         }
 
 
@@ -354,21 +365,26 @@ namespace Engine {
 
         for (Move move = move_picker.next_move(); move != Move::none(); move = move_picker.next_move()) {
             if (!pos.legal(move)) continue;
+            if (move == excluded) continue;
             ++i;
             found_move = true;
             const bool capture = pos.is_capture(move);
             const bool gives_check = pos.gives_check(move);
+            int new_depth = depth -1;
+            //Late move pruning
             if (lmp_ok && !capture && !gives_check
                 && best_score > -Eval::MATE_THRESHOLD
                 && i>= lmp[improving,depth]) {
                 move_picker.skip_quiets();
                 continue;
             }
+            //futility pruning
             if (fp_ok && i > 1 && !capture && !gives_check) {
                 best_score = static_cast<Score>(std::max( static_cast<int>(best_score), ss->static_eval + FP_MARGIN * depth));
                 move_picker.skip_quiets();
                 continue;
             }
+            //history pruning
             if (hp_ok && !capture && !gives_check && best_score > -Eval::MATE_THRESHOLD) {
                 assert(best_score != -Eval::INF);
                 const Piece  moved = pos.square(move.from());
@@ -379,42 +395,78 @@ namespace Engine {
                     continue;
                 }
             }
+            //see pruning
             if (see_ok && best_score > -Eval::MATE_THRESHOLD) {
                 if (capture || gives_check) {
                     if (!pos.see_ge(move, -SEE_CAPTURE_MARGIN * depth))
                         continue;
                 } else {
                     const int r = reduction(depth, i) + 512 - improving * 1024;
-                    const int lmr_depth = std::max(depth - 1 - r / 1024, 0);
+                    const int lmr_depth = std::max(new_depth - r / 1024, 0);
                     if (!pos.see_ge(move, -SEE_QUIET_MARGIN * lmr_depth * lmr_depth))
                         continue;
                 }
             }
             tt.prefetch(pos.prefetch_key(move));
 
+
+
+            int extension = 0;
+            if (tt_hit) {
+                assert(tt_score != Eval::NO_SCORE);
+            }
+            //extensions
+            if ( !RootNode
+                && move == tt_move && excluded == Move::none()
+                && depth>=6 && tt_hit
+                && std::abs(tt_score) < Eval::MATE_THRESHOLD
+                && (tt_bound == Bound::LOWER || tt_bound == Bound::EXACT)
+                && tt_depth >= depth - 3) {
+
+                const auto singular_beta  = static_cast<Score>(tt_score - 2 * depth);
+                const int   singular_depth = (depth - 1) / 2;
+
+                ss->excluded = move;
+
+                const Score s = alpha_beta<NodeType::NonPV>(singular_beta - 1, singular_beta,
+                                                    singular_depth, ss);
+
+                ss->excluded = Move::none();
+
+                if (s < singular_beta) extension = 1;
+                }
+            new_depth = depth -1 + extension;
+
             ss->current_move = move;
             ss->moved_piece = pos.square(move.from());
             ss->continuation_history = &continuation_history[ss->moved_piece][move.to()];
 
             pos.make_move(move,gives_check);
+
             Score score = -Eval::INF;
             bool full_null_window;
+            //late move reduction
             if (depth>=3 && i>=4 && !capture && !in_check) {
                 const int r = reduction(depth, i) + 512 - improving * 1024;
-                const int d = std::clamp(depth - 1  - (r  / 1024), 1, depth -1);
+                const int d = std::clamp(new_depth  - (r  / 1024), 1, new_depth);
                 score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, d, ss + 1));
-                full_null_window = (score > alpha && d < depth -1);
+                full_null_window = (score > alpha && d < new_depth);
             }else {
                 full_null_window = !PvNode || i > 1;
             }
+            //lmr research
             if (full_null_window)
-                score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, depth-1, ss + 1));
+                score = static_cast<Score>(-alpha_beta<NodeType::NonPV>(-alpha - 1, -alpha, new_depth, ss + 1));
+            //pvs
             if constexpr (PvNode) {
                 if (i == 1 || (score > alpha && score < beta)) {
-                    score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, depth -1 , ss + 1));
+                    score = static_cast<Score>(-alpha_beta<NodeType::PV>(-beta, -alpha, new_depth , ss + 1));
                 }
             }
             pos.undo_move();
+
+
+
             if (stop.load(std::memory_order_relaxed)) return 0;
 
 
@@ -446,12 +498,13 @@ namespace Engine {
 
         if constexpr (!RootNode) {
             if (!found_move) {
+                if (excluded != Move::none()) return alpha; // not mate — extension hid the only move
                 if (in_check) return static_cast<Score>(-Eval::MATE_SCORE + pos.ply());
                 return 0;
             }
         }
 
-        if (!stop.load(std::memory_order_relaxed)) {
+        if (!stop.load(std::memory_order_relaxed) ) {
             Bound bound = (best_score <= original_alpha) ? Bound::UPPER
                          : (best_score >= beta)           ? Bound::LOWER
                                                            : Bound::EXACT;
@@ -459,7 +512,9 @@ namespace Engine {
                 if (best_move != Move::none() && best_score > original_alpha)
                     update_stats(ss,best_move, tt_move, depth,quiets_searched,captured_searched);
             }
-            tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
+            if (excluded == Move::none()) {
+                tt.insert(zobrist_key, TranspositionTable::value_to_tt(best_score, pos.ply()), depth, best_move, bound,PvNode);
+            }
         }
         assert(best_score != -Eval::INF);
         return best_score;
@@ -658,6 +713,9 @@ namespace Engine {
             if (soft_limit != Duration::max()) {
                 const auto scaled = Duration{ static_cast<int64_t>(soft_limit.count() * STABILITY_SCALE[stability]) };
                 if (elapsed >= scaled) return best_move;
+            }
+            if (limits.nodes_soft && nodes >= limits.nodes_soft) {
+                return best_move;
             }
         }
 

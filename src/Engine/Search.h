@@ -80,6 +80,7 @@ namespace Engine {
         Score static_eval = Eval::NO_SCORE;
         std::array<ChessCore::Move,2> killers = {ChessCore::Move::none(), ChessCore::Move::none()};
         ChessCore::Move current_move  = ChessCore::Move::none();
+        ChessCore::Move excluded = ChessCore::Move::none();
         Piece           moved_piece  = ChessCore::Pieces::EMPTY;
         History::PieceToHistory* continuation_history = nullptr;
         void update_killer(const ChessCore::Move m) {
