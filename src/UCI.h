@@ -7,7 +7,7 @@
 
 
 namespace UCI {
-    void loop();
+    void loop(int argc = 1, char** argv = nullptr);
     
 
 

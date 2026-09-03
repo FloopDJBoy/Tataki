@@ -20,8 +20,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #src/Gui/Board.cpp
 #src/Gui/Board.h
 #resources.qrc
-set(ENGINE_NAME "Sashimi")
-set(ENGINE_VERSION "v0.22.0")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/config.mk" CONFIG_LINES)
+
+foreach(LINE ${CONFIG_LINES})
+    if(LINE MATCHES "^([A-Za-z0-9_]+)[ \t]*=[ \t]*(.*)$")
+        set(${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
+    endif()
+endforeach()
+
+# Makes CMake automatically re-run if config.mk changes
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/config.mk")
+
+message(STATUS "Loaded ${ENGINE_NAME} v${ENGINE_VERSION}")
 
 
 
@@ -76,6 +86,7 @@ target_compile_definitions(chessEngine PRIVATE
 target_include_directories( chessEngine PRIVATE
         ${PROJECT_SOURCE_DIR}/external
         ${PROJECT_SOURCE_DIR}/src
+        ${PROJECT_SOURCE_DIR}/assets
 )
 set_target_properties(chessEngine PROPERTIES
         OUTPUT_NAME ${ENGINE_NAME}_${ENGINE_VERSION}

@@ -145,6 +145,7 @@ namespace Engine {
         [[nodiscard]] SearchResult search(int depth, SearchStack* ss, Score prev_score);
         [[nodiscard]] std::chrono::milliseconds calculate_soft_limit() const;
         [[nodiscard]] std::chrono::milliseconds calculate_hard_limit() const;
+
         std::chrono::time_point<std::chrono::steady_clock> search_deadline;
 
         void update_stats(const SearchStack* ss,ChessCore::Move best_move, ChessCore::Move tt_move, int depth,
@@ -155,6 +156,7 @@ namespace Engine {
 
     public:
         void stop_search() {stop.store(true,std::memory_order_relaxed);}
+        [[nodiscard]] uint64_t node_count() const { return nodes; }
         Search(const ChessCore::Position &p,
             const SearchLimits& search_limits,
             TranspositionTable& t,

@@ -21,7 +21,7 @@ namespace Engine {
         start_time = Clock::now();
         stop();
         if (enable_book_) {
-            auto book_move = book[position];
+            auto book_move = (*book)[position];
             if (book_move!= ChessCore::Move::none()) {
                 best_move_ = book_move;
                 finish_search();
@@ -41,6 +41,7 @@ namespace Engine {
             ////print_time();
             {
                 std::lock_guard lock(mutex);
+                total_nodes.fetch_add(searcher->node_count(), std::memory_order_relaxed);
                 best_move_ = move;
             }
             //std::cerr << "C: best_move stored\n";

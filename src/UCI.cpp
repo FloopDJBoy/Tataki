@@ -22,22 +22,18 @@ namespace UCI {
     using std::string;
     namespace {
         std::array options = {
-            "option name OwnBook type check default true",
+            "option name OwnBook type check default false",
             "option name BookFile type string default Perfect2023.bin",
-            "option name Hash type spin default 128 min 1 max 4096"
+            "option name Hash type spin default 128 min 1 max 4096",
+            "option name SoftNodes type check default false",
+            "option name HardNodes type spin default 0 min 0 max 1000000000"
         };
-        std::array bench_pos = {
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10",
-            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 11",
-            "4rrk1/pp1n3p/3q2pQ/2p1pb2/2PP4/2P3N1/P2B2PP/4RRK1 b - - 7 19",
-            "rq3rk1/ppp2ppp/1bnpN3/3N2B1/4P3/7P/PPPQ1PP1/2KR3R b - - 0 14",
-            "r1bq1r1k/1pp1n1pp/1p1p4/4p2Q/4PpP1/1BNP4/PPP2P1P/3R1RK1 b - g3 0 14",
-            "r3r1k1/2p2ppp/p1p1bn2/8/1q2P3/2NPQN2/PPP3PP/R4RK1 b - - 2 15",
-            "r1bbk1nr/pp3p1p/2n5/1N4p1/2Np1B2/8/PPP2PPP/2KR1B1R w kq - 0 13",
-            "r1bq1rk1/ppp1nppp/4n3/3p3Q/3P4/1BP1B3/PP1N2PP/R4RK1 w - - 1 16",
-            "4r1k1/3n1ppp/4p3/3p4/3P4/3BPN2/1p3PPP/1R4K1 b - - 1 24"
+        //benchmark positions from Igel which got them from Ethereal
+        constexpr std::array benchmark_positions = {
+            #include "bench.csv"
         };
+        bool     soft_nodes = false;
+        uint64_t hard_nodes = 0;
         bool check_move_picker(const ChessCore::Position& pos, const ChessCore::Move tt,
                        const int depth, const Engine::History::CaptureHistory& ch,
                        const Engine::History::ButterflyHistory& bh,const std::array<ChessCore::Move,2>& killers) {
@@ -112,23 +108,6 @@ namespace UCI {
             }
             std::cout << "mpcheck: " << positions << " positions, "
                       << checks << " checks, " << failures << " failures\n";
-        }
-        void run_benchmark(Engine::Engine& engine) {
-            engine.enable_book(false);
-            Engine::SearchLimits limits = {.depth = 12,.nodes = 5000000};
-            for (const auto& fen : bench_pos) {
-                auto start_time = std::chrono::high_resolution_clock::now();
-                std::cerr<<fen <<std::endl;
-                ChessCore::Position pos(fen);
-                engine.clear();
-                engine.set_position(pos);
-                engine.go(limits);
-                engine.wait_until_search_finished();
-#if DEBUG_STATS
-                engine.print_stats();
-#endif
-
-            }
         }
         ChessCore::Position parse_position(const std::string& command)
         {
@@ -213,6 +192,16 @@ namespace UCI {
                     limits.ponder = true;
                 }
             }
+            // SoftNodes: reinterpret `go nodes N` as a soft limit.
+            if (soft_nodes && limits.nodes) {
+                limits.nodes_soft = limits.nodes;
+                limits.nodes      = 0;
+            }
+
+            // HardNodes: hard ceiling, never loosens an explicit `go nodes`.
+            if (hard_nodes)
+                limits.nodes = limits.nodes ? std::min(limits.nodes, hard_nodes)
+                                            : hard_nodes;
             return limits;
         }
         void parse_set_option(const std::string& command,Engine::Engine& engine) {
@@ -240,73 +229,126 @@ namespace UCI {
                 size_t tt_size;
                 ss>>tt_size;
                 engine.set_tt_size(tt_size);
+            }else if (token == "SoftNodes") {
+                ss >> token;                    // "value"
+                std::string v;
+                ss >> v;
+                soft_nodes = (v == "true" || v == "1");
+            }else if (token == "HardNodes") {
+                ss >> token;                    // "value"
+                ss >> hard_nodes;
             }
         }
     }
-    void loop() {
-        string command;
-        Engine::Engine engine("assets/opening_books/Perfect2023.bin");
+    void do_ucinewgame(Engine::Engine& engine) {
+        engine.stop();
+        engine.clear();
+        auto pos = ChessCore::FenHelper::STARTING_POSITION;
+        engine.set_position(pos);
+    }
+    void run_benchmark(Engine::Engine& engine,std::optional<int> depth = std::nullopt) {
+        using Clock = std::chrono::steady_clock;
+        using ChessCore::Position;
+        engine.on_search_finished(nullptr);   // no bestmove spam
+        engine.set_tt_size(16);
+
+        if (!depth) {
+            depth = 12;
+        }
+        std::cout << "Running benchmark" << std::endl;
+        engine.enable_book(false);
+        const Engine::SearchLimits limits = {.depth = *depth};
+        const auto start = Clock::now();
+        for (auto& pos : benchmark_positions) {
+            do_ucinewgame(engine);
+            engine.set_position(Position(pos));
+            engine.go(limits);
+            engine.wait_until_search_finished();
+        }
+        const auto ms = std::max<int64_t>(1,
+        std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count());
+
+        const uint64_t n = engine.nodes();
+        std::cout << n << " nodes " << n * 1000 / ms << " nps" << std::endl;
+
+    }
+    static bool handle(Engine::Engine& engine,const string& command) {
+
         ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
         //std::cerr << pos.fen() << std::endl;
-        assert(pos.fen() == ChessCore::FenHelper::STARTING_POSITION_FEN);
-        engine.set_position(pos);
-        engine.enable_book(false);
         engine.on_search_finished([](const ChessCore::Move move) {
                    std::cout << "bestmove "
                              << move.to_string()
                              << std::endl;
                });
-        while (std::getline(std::cin, command)) {
-            if (command == "uci") {
-                std::cout << "id name "<< ENGINE_NAME << " " << ENGINE_VERSION << std::endl;
-                std::cout << "id author FloopDJBoy" << std::endl;
-                for (const auto& option : options) {
-                    std::cout << option << std::endl;
-                }
-                std::cout << "uciok" << std::endl;
+        if (command == "uci") {
+            std::cout << "id name "<< ENGINE_NAME << " " << ENGINE_VERSION << std::endl;
+            std::cout << "id author FloopDJBoy" << std::endl;
+            for (const auto& option : options) {
+                std::cout << option << std::endl;
             }
-            else if (command == "isready") {
-                std::cout << "readyok" << std::endl;
-            }else if (command.starts_with("go")) {
-                std::string token;
-                std::istringstream ss(command);
-                ss >> token; //"go"
-                ss >> token;
-                if (token == "preft") {
-                    int depth;
-                    ss >> depth;
-                    ChessCore::preft::test(pos, depth);
-                    continue;
-                }
-                auto limits = parse_go(command);
-                engine.go(limits);
+            std::cout << "uciok" << std::endl;
+        }
+        else if (command == "isready") {
+            std::cout << "readyok" << std::endl;
+        }else if (command.starts_with("go")) {
+            std::string token;
+            std::istringstream ss(command);
+            ss >> token; //"go"
+            ss >> token;
+            if (token == "preft") {
+                int depth;
+                ss >> depth;
+                ChessCore::preft::test(pos, depth);
+                return true;
             }
-            else if (command.starts_with("position")) {
-                pos = parse_position(command);
-                engine.set_position(pos);
-            }else if (command == "quit") {
-                break;
-            }else if (command == "stop") {
-                engine.stop();
-            }else if (command == "getfen") {
-                std::cerr << "fen " << pos.fen() << std::endl;
-            }else if (command == "ucinewgame") {
-                engine.stop();
-                engine.clear();
-                pos = ChessCore::FenHelper::STARTING_POSITION;
-                engine.set_position(pos);
-            }else if (command.starts_with("setoption")) {
-                parse_set_option(command, engine);
-            }else if (command=="bench") {
-                run_benchmark(engine);
-            }else if (command.starts_with("mpcheck")) {
-                std::istringstream ss(command);
-                std::string token, path;
-                ss >> token;
-                if (!(ss >> path)) path = "E:/positions.txt";
-                run_move_picker_suite(path);
+            auto limits = parse_go(command);
+            engine.go(limits);
+        }
+        else if (command.starts_with("position")) {
+            pos = parse_position(command);
+            engine.set_position(pos);
+        }else if (command == "quit") {
+            return false;
+        }else if (command == "stop") {
+            engine.stop();
+        }else if (command == "getfen") {
+            std::cerr << "fen " << pos.fen() << std::endl;
+        }else if (command == "ucinewgame") {
+            do_ucinewgame(engine);
+        }else if (command.starts_with("setoption")) {
+            parse_set_option(command, engine);
+        }else if (command.starts_with("mpcheck")) {
+            std::istringstream ss(command);
+            std::string token, path;
+            ss >> token;
+            if (!(ss >> path)) path = "E:/positions.txt";
+            run_move_picker_suite(path);
+        }else if (command == "bench") {
+            std::istringstream ss(command);
+            std::string token;
+            int depth;
+            ss >> token; //bench
+            ss>>depth;
+            run_benchmark(engine,depth);
+        }
+        return true;
+    }
+    void loop(const int argc, char** argv) {
+        Engine::Engine engine;
+        ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
+        engine.set_position(pos);
+        engine.enable_book(false);
+        const std::vector<std::string> args(argv,argv+argc);
+        if (args.size() > 1) {
+            for (int i = 1; i < args.size(); ++i) {
+                if (!handle(engine,args[i])) return;
             }
         }
+        std::string command;
+        while (std::getline(std::cin,command)) {
+            if (!handle(engine,command)) break;
+        }
+
     }
 }
-

@@ -5,13 +5,14 @@
 #include "TranspositionTable.h"
 
 #include <algorithm>
+#include <bit>
 #include <limits>
 
 namespace Engine {
     TranspositionTable::TranspositionTable(const size_t megabytes) :
-        NUM_BUCKETS((megabytes * BYTES_PER_MB) /(sizeof(TTEntry) * BUCKET_SIZE)),
-        tt(std::make_unique<TTEntry[]>(NUM_BUCKETS * BUCKET_SIZE))
-    {}
+    NUM_BUCKETS(std::bit_floor(std::max<size_t>(1,
+        (megabytes * BYTES_PER_MB) / (sizeof(TTEntry) * BUCKET_SIZE)))),
+    tt(std::make_unique<TTEntry[]>(NUM_BUCKETS * BUCKET_SIZE)) {}
 
     int TranspositionTable::replacement_score(const TTEntry &e) const {
         // Unsigned 8-bit underflow naturally handles generation wrap-around

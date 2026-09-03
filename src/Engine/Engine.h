@@ -15,11 +15,12 @@
 
 namespace Engine {
     class Engine {
-        OpeningBook book;
+        std::optional<OpeningBook> book = std::nullopt;
         ChessCore::Position position;
         bool enable_book_ = true;
         TranspositionTable tt;
         PawnTT pawn_tt;
+        std::atomic<uint64_t> total_nodes{0};
         History::CaptureHistory capture_history;
         History::ButterflyHistory butterfly_history;
         std::unique_ptr<History::ContinuationHistory> continuation_history;
@@ -58,6 +59,28 @@ namespace Engine {
                 }
             }
         }
+        explicit Engine(
+           const ChessCore::Position* pos = nullptr
+       ) :
+             position(pos ? *pos : ChessCore::FenHelper::STARTING_POSITION),
+             continuation_history(std::make_unique<History::ContinuationHistory>()){
+            for (auto& a : capture_history) {
+                for (auto& b : a) {
+                    b.fill({});
+                }
+            }
+            for (auto& a : butterfly_history) {
+                for (auto& b : a) {
+                    b.fill({});
+                }
+            }
+            for (auto& a : *continuation_history) {
+                for (auto& b : a) {
+                    b.fill({});
+                }
+            }
+        }
+
 
         ~Engine();
 
@@ -93,9 +116,9 @@ namespace Engine {
         void wait_until_search_finished() const;
         bool is_finished() const;
         ChessCore::Move best_move() const;
-#if DEBUG_STATS
-        void print_stats() const {searcher->print_stats();}
-#endif
+        [[nodiscard]] uint64_t nodes() const { return total_nodes.load(std::memory_order_relaxed); }
+        void reset_nodes() { total_nodes.store(0, std::memory_order_relaxed); }
+        
     };
 } // Engine
 

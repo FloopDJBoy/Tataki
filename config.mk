@@ -1,0 +1,2 @@
+ENGINE_NAME = Sashimi
+ENGINE_VERSION = v0.22.2

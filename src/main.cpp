@@ -51,6 +51,6 @@ int main(int argc, char *argv[]) {
     //s2 += " v0.2.7";
     //const std::string edp = R"(E:\lichess-big3-resolved\lichess-big3-resolved.book)";
     //Engine::LazyTuning::run_lazy_tuning(edp);
-    UCI::loop();
+    UCI::loop(argc,argv);
     return 0;
 }
