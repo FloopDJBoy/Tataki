@@ -252,7 +252,7 @@ namespace UCI {
         engine.on_search_finished(nullptr);   // no bestmove spam
         engine.set_tt_size(16);
 
-        if (!depth) {
+        if (!depth || *depth == 0) {
             depth = 12;
         }
         std::cout << "Running benchmark" << std::endl;
@@ -324,7 +324,7 @@ namespace UCI {
             ss >> token;
             if (!(ss >> path)) path = "E:/positions.txt";
             run_move_picker_suite(path);
-        }else if (command == "bench") {
+        }else if (command.starts_with("bench")) {
             std::istringstream ss(command);
             std::string token;
             int depth;
@@ -336,7 +336,7 @@ namespace UCI {
     }
     void loop(const int argc, char** argv) {
         Engine::Engine engine;
-        ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
+        const ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
         engine.set_position(pos);
         engine.enable_book(false);
         const std::vector<std::string> args(argv,argv+argc);

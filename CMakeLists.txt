@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.3)
-project(chessEngine LANGUAGES CXX)
+project(Tataki LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,7 +35,7 @@ message(STATUS "Loaded ${ENGINE_NAME} v${ENGINE_VERSION}")
 
 
 
-add_executable(chessEngine
+add_executable(Tataki
         src/main.cpp
         src/Types.h
         src/ChessCore/Move.h
@@ -79,16 +79,16 @@ add_executable(chessEngine
 if (MSVC)
     target_link_options(${PROJECT_NAME} PRIVATE /STACK:16777216)
 endif()
-target_compile_definitions(chessEngine PRIVATE
+target_compile_definitions(Tataki PRIVATE
         ENGINE_NAME="${ENGINE_NAME}"
         ENGINE_VERSION="${ENGINE_VERSION}"
 )
-target_include_directories( chessEngine PRIVATE
+target_include_directories( Tataki PRIVATE
         ${PROJECT_SOURCE_DIR}/external
         ${PROJECT_SOURCE_DIR}/src
         ${PROJECT_SOURCE_DIR}/assets
 )
-set_target_properties(chessEngine PROPERTIES
+set_target_properties(Tataki PROPERTIES
         OUTPUT_NAME ${ENGINE_NAME}_${ENGINE_VERSION}
 )
 #target_link_libraries(chessEngine
@@ -97,22 +97,22 @@ set_target_properties(chessEngine PROPERTIES
 #        Qt6::Widgets
 #        Qt6::Svg
 #)
-add_custom_command(TARGET chessEngine POST_BUILD
+add_custom_command(TARGET Tataki POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
-        "$<TARGET_FILE_DIR:chessEngine>/assets"
+        "$<TARGET_FILE_DIR:Tataki>/assets"
 )
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(chessEngine PRIVATE
+    target_compile_options(Tataki PRIVATE
             $<$<CONFIG:RelWithDebInfo>:/fsanitize=address>
             $<$<CONFIG:RelWithDebInfo>:/Oy->
     )
 
-    target_link_options(chessEngine PRIVATE
+    target_link_options(Tataki PRIVATE
             $<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>
     )
 
-    target_link_libraries(chessEngine PRIVATE
+    target_link_libraries(Tataki PRIVATE
             $<$<CONFIG:RelWithDebInfo>:E:/clang+llvm-22.1.8-x86_64-pc-windows-msvc/clang+llvm-22.1.8-x86_64-pc-windows-msvc/lib/clang/22/lib/windows/clang_rt.asan_dynamic-x86_64.lib>
             $<$<CONFIG:RelWithDebInfo>:E:/clang+llvm-22.1.8-x86_64-pc-windows-msvc/clang+llvm-22.1.8-x86_64-pc-windows-msvc/lib/clang/22/lib/windows/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib>
     )
