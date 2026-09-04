@@ -434,10 +434,11 @@ namespace Engine {
                     extension = 1;
                 }
                 //multi cut
-                else if (s>= beta &&  std::abs(s) < Eval::MATE_THRESHOLD) {
-                    if (stop.load(std::memory_order_relaxed)) return 0;
-                    return s;
-                }
+                //failed to pass sprt
+                //else if (s>= beta &&  std::abs(s) < Eval::MATE_THRESHOLD) {
+                //    if (stop.load(std::memory_order_relaxed)) return 0;
+                //    return s;
+                //}
             }
             new_depth = depth -1 + extension;
 
