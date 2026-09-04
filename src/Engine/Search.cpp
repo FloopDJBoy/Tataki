@@ -412,9 +412,6 @@ namespace Engine {
 
 
             int extension = 0;
-            if (tt_hit) {
-                assert(tt_score != Eval::NO_SCORE);
-            }
             //extensions
             if ( !RootNode
                 && move == tt_move && excluded == Move::none()
@@ -433,8 +430,15 @@ namespace Engine {
 
                 ss->excluded = Move::none();
 
-                if (s < singular_beta) extension = 1;
+                if (s < singular_beta) {
+                    extension = 1;
                 }
+                //multi cut
+                else if (s>= beta &&  std::abs(s) < Eval::MATE_THRESHOLD) {
+                    if (stop.load(std::memory_order_relaxed)) return 0;
+                    return s;
+                }
+            }
             new_depth = depth -1 + extension;
 
             ss->current_move = move;
