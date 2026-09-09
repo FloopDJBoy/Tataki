@@ -10,7 +10,7 @@
 #include "Types.h"
 
 
-namespace Engine::Eval::NNEU::FilterData {
+namespace Engine::Eval::NNUE::FilterData {
     void pgn_to_viriformat(std::string_view pgn_path, std::string_view out_path);
     void pgn_to_viriformat_mt( std::string_view pgn_path, std::string_view out_path,unsigned threads);
 };

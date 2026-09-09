@@ -7,6 +7,8 @@
 #include "PawnTT.h"
 #include "ChessCore/Pieces.h"
 #include "ChessCore/Position.h"
+#include "nneu/Network.h"
+
 namespace Engine::Eval {
     using namespace ChessCore;
     
@@ -161,76 +163,79 @@ namespace Engine::Eval {
     constexpr ScorePair MOBILITY_SWING = mobility_max_swing();
     // +2 covers integer-division truncation during mg/eg interpolation.
     constexpr Score LAZY_EVAL_MARGIN = 715; //98.5% coverage. made using LazyTuning::run_lazy_tuning(edp_file)
+    // Score evaluate(const Position& pos) {
+    //     return evaluate(pos,nullptr,NEG_INF, INF); // no window context -> always full eval
+    // }
+    // Score evaluate(const Position& pos,PawnTT* pawn_tt,const Score alpha, const Score beta) {
+    //     const int mg_weight = std::clamp(static_cast<int>(pos.state().phase), 0, Eval::MAX_PHASE);
+    //     const Key pawn_key = pos.pawn_key();
+    //
+    //     const auto& mat = pos.state().material_score;
+    //     const auto& mat_w = mat[color_idx(Color::WHITE)];
+    //     const auto& mat_b = mat[color_idx(Color::BLACK)];
+    //
+    //     // Cheap: material_score is already tracked incrementally in make_move/undo_move.
+    //     const int  lazy_w = interpolate(mat_w,mg_weight);
+    //     const int  lazy_b = interpolate(mat_b,mg_weight);
+    //     const int tempo = interpolate(TEMPO_BONUS,mg_weight);
+    //     const int w_tempo = pos.side_to_move() == Color::WHITE? tempo : -tempo;
+    //     ScorePair pawn_score{0,0};
+    //     int final_pawn = 0;
+    //     const PawnEntry* pawn_entry= nullptr;
+    //     if (pawn_tt) {
+    //         pawn_entry = (*pawn_tt)[pawn_key];
+    //         if (pawn_entry) {
+    //             pawn_score = pawn_entry->score;
+    //             final_pawn = interpolate(pawn_score,mg_weight);
+    //         }
+    //     }
+    //     const int lazy_diff = lazy_w - lazy_b + final_pawn + w_tempo;
+    //
+    //     const auto lazy_eval = static_cast<Score>(pos.side_to_move() == Color::WHITE ? lazy_diff : -lazy_diff);
+    //
+    //     if (lazy_eval >= static_cast<int>(beta) + LAZY_EVAL_MARGIN ||
+    //         lazy_eval <= static_cast<int>(alpha) - LAZY_EVAL_MARGIN) {
+    //         return lazy_eval;
+    //     }
+    //
+    //     // Expensive: only reached when the position is actually close to the window.
+    //     const BitBoard occ = pos.all_bb();
+    //     const BitBoard pawns_w = pos.piece_bb(PieceType::PAWN, Color::WHITE);
+    //     const BitBoard pawns_b = pos.piece_bb(PieceType::PAWN, Color::BLACK);
+    //     const BitBoard pawn_attacks_w = BitBoards::get_pawns_attacks<Color::WHITE>(pawns_w);
+    //     const BitBoard pawn_attacks_b = BitBoards::get_pawns_attacks<Color::BLACK>(pawns_b);
+    //     const BitBoard blocked_pawns_w = pawns_w & (occ >> 8);
+    //     const BitBoard blocked_pawns_b = pawns_b & (occ << 8);
+    //     const BitBoard area_w = ~(pos.color_bb(Color::WHITE) | pawn_attacks_b | blocked_pawns_w);
+    //     const BitBoard area_b = ~(pos.color_bb(Color::BLACK) | pawn_attacks_w | blocked_pawns_b);
+    //
+    //     auto eval_mob = [&](const Color c, const BitBoard area) {
+    //         return evaluate_mobility<PieceType::KNIGHT>(pos, c, area) +
+    //                evaluate_mobility<PieceType::BISHOP>(pos, c, area) +
+    //                evaluate_mobility<PieceType::ROOK>(pos, c, area) +
+    //                evaluate_mobility<PieceType::QUEEN>(pos, c, area);
+    //     };
+    //
+    //     auto score = mat;
+    //     score[color_idx(Color::WHITE)] += eval_mob(Color::WHITE, area_w);
+    //     score[color_idx(Color::BLACK)] += eval_mob(Color::BLACK, area_b);
+    //
+    //     const auto score_w = score[color_idx(Color::WHITE)];
+    //     const auto score_b = score[color_idx(Color::BLACK)];
+    //
+    //     const int final_w = interpolate(score_w,mg_weight);
+    //     const int final_b = interpolate(score_b,mg_weight);
+    //     if (!pawn_entry) {
+    //         pawn_score = evaluate_pawn_structure(pos.piece_bb(Pieces::WHITE_PAWN),pos.piece_bb(Pieces::BLACK_PAWN));
+    //         final_pawn = interpolate(pawn_score,mg_weight);
+    //         if (pawn_tt) {
+    //             pawn_tt->insert(pawn_key,pawn_score);
+    //         }
+    //     }
+    //     const int evaluation = (final_w - final_b) + final_pawn + w_tempo;
+    //     return static_cast<Score>(pos.side_to_move() == Color::WHITE ? evaluation : -evaluation);
+    // }
     Score evaluate(const Position& pos) {
-        return evaluate(pos,nullptr,NEG_INF, INF); // no window context -> always full eval
-    }
-    Score evaluate(const Position& pos,PawnTT* pawn_tt,const Score alpha, const Score beta) {
-        const int mg_weight = std::clamp(static_cast<int>(pos.state().phase), 0, Eval::MAX_PHASE);
-        const Key pawn_key = pos.pawn_key();
-
-        const auto& mat = pos.state().material_score;
-        const auto& mat_w = mat[color_idx(Color::WHITE)];
-        const auto& mat_b = mat[color_idx(Color::BLACK)];
-
-        // Cheap: material_score is already tracked incrementally in make_move/undo_move.
-        const int  lazy_w = interpolate(mat_w,mg_weight);
-        const int  lazy_b = interpolate(mat_b,mg_weight);
-        const int tempo = interpolate(TEMPO_BONUS,mg_weight);
-        const int w_tempo = pos.side_to_move() == Color::WHITE? tempo : -tempo;
-        ScorePair pawn_score{0,0};
-        int final_pawn = 0;
-        const PawnEntry* pawn_entry= nullptr;
-        if (pawn_tt) {
-            pawn_entry = (*pawn_tt)[pawn_key];
-            if (pawn_entry) {
-                pawn_score = pawn_entry->score;
-                final_pawn = interpolate(pawn_score,mg_weight);
-            }
-        }
-        const int lazy_diff = lazy_w - lazy_b + final_pawn + w_tempo;
-
-        const auto lazy_eval = static_cast<Score>(pos.side_to_move() == Color::WHITE ? lazy_diff : -lazy_diff);
-
-        if (lazy_eval >= static_cast<int>(beta) + LAZY_EVAL_MARGIN ||
-            lazy_eval <= static_cast<int>(alpha) - LAZY_EVAL_MARGIN) {
-            return lazy_eval;
-        }
-
-        // Expensive: only reached when the position is actually close to the window.
-        const BitBoard occ = pos.all_bb();
-        const BitBoard pawns_w = pos.piece_bb(PieceType::PAWN, Color::WHITE);
-        const BitBoard pawns_b = pos.piece_bb(PieceType::PAWN, Color::BLACK);
-        const BitBoard pawn_attacks_w = BitBoards::get_pawns_attacks<Color::WHITE>(pawns_w);
-        const BitBoard pawn_attacks_b = BitBoards::get_pawns_attacks<Color::BLACK>(pawns_b);
-        const BitBoard blocked_pawns_w = pawns_w & (occ >> 8);
-        const BitBoard blocked_pawns_b = pawns_b & (occ << 8);
-        const BitBoard area_w = ~(pos.color_bb(Color::WHITE) | pawn_attacks_b | blocked_pawns_w);
-        const BitBoard area_b = ~(pos.color_bb(Color::BLACK) | pawn_attacks_w | blocked_pawns_b);
-
-        auto eval_mob = [&](const Color c, const BitBoard area) {
-            return evaluate_mobility<PieceType::KNIGHT>(pos, c, area) +
-                   evaluate_mobility<PieceType::BISHOP>(pos, c, area) +
-                   evaluate_mobility<PieceType::ROOK>(pos, c, area) +
-                   evaluate_mobility<PieceType::QUEEN>(pos, c, area);
-        };
-
-        auto score = mat;
-        score[color_idx(Color::WHITE)] += eval_mob(Color::WHITE, area_w);
-        score[color_idx(Color::BLACK)] += eval_mob(Color::BLACK, area_b);
-
-        const auto score_w = score[color_idx(Color::WHITE)];
-        const auto score_b = score[color_idx(Color::BLACK)];
-
-        const int final_w = interpolate(score_w,mg_weight);
-        const int final_b = interpolate(score_b,mg_weight);
-        if (!pawn_entry) {
-            pawn_score = evaluate_pawn_structure(pos.piece_bb(Pieces::WHITE_PAWN),pos.piece_bb(Pieces::BLACK_PAWN));
-            final_pawn = interpolate(pawn_score,mg_weight);
-            if (pawn_tt) {
-                pawn_tt->insert(pawn_key,pawn_score);
-            }
-        }
-        const int evaluation = (final_w - final_b) + final_pawn + w_tempo;
-        return static_cast<Score>(pos.side_to_move() == Color::WHITE ? evaluation : -evaluation);
+        return NNUE::net().evaluate(pos.accumulator(), pos.side_to_move());
     }
 } // Engine

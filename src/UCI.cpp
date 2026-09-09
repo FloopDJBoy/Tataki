@@ -111,7 +111,7 @@ namespace UCI {
         }
         ChessCore::Position parse_position(const std::string& command)
         {
-            ChessCore::Position pos = ChessCore::FenHelper::STARTING_POSITION;
+            ChessCore::Position pos = ChessCore::Position(ChessCore::FenHelper::STARTING_POSITION_FEN);
             std::istringstream ss(command);
             std::string token;
 
@@ -119,10 +119,10 @@ namespace UCI {
             ss >> token;
 
             if (token == "startpos") {
-                pos = ChessCore::FenHelper::STARTING_POSITION;
+                pos = ChessCore::Position(ChessCore::FenHelper::STARTING_POSITION_FEN);
             }
             else if (token == "kiwipete") {
-                pos = ChessCore::FenHelper::KIWIPETE;
+                pos = ChessCore::Position(ChessCore::FenHelper::KIWIPETE_FEN);
             }
             else if (token == "fen") {
                 std::string fen;
@@ -240,13 +240,15 @@ namespace UCI {
             }
         }
     }
-    void do_ucinewgame(Engine::Engine& engine) {
+
+    static void do_ucinewgame(Engine::Engine& engine) {
         engine.stop();
         engine.clear();
-        auto pos = ChessCore::FenHelper::STARTING_POSITION;
+        auto pos = ChessCore::Position(ChessCore::FenHelper::STARTING_POSITION_FEN);
         engine.set_position(pos);
     }
-    void run_benchmark(Engine::Engine& engine,std::optional<int> depth = std::nullopt) {
+
+    static void run_benchmark(Engine::Engine& engine,std::optional<int> depth = std::nullopt) {
         using Clock = std::chrono::steady_clock;
         using ChessCore::Position;
         engine.on_search_finished(nullptr);   // no bestmove spam
@@ -299,7 +301,7 @@ namespace UCI {
             if (token == "preft") {
                 int depth;
                 ss >> depth;
-                ChessCore::preft::test(pos, depth);
+                ChessCore::preft::test(engine.get_position(), depth);
                 return true;
             }
             auto limits = parse_go(command);
@@ -313,7 +315,7 @@ namespace UCI {
         }else if (command == "stop") {
             engine.stop();
         }else if (command == "getfen") {
-            std::cerr << "fen " << pos.fen() << std::endl;
+            std::cerr << "fen " << engine.get_position().fen() << std::endl;
         }else if (command == "ucinewgame") {
             do_ucinewgame(engine);
         }else if (command.starts_with("setoption")) {

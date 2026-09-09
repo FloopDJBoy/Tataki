@@ -18,7 +18,7 @@
 #include "ChessCore/FenHelper.h"
 #include "ChessCore/Position.h"
 
-namespace Engine::Eval::NNEU::FilterData {
+namespace Engine::Eval::NNUE::FilterData {
     namespace {
 
         // The format's own mate marker (see the spec's worked example), which is

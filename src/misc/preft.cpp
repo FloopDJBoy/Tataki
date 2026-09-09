@@ -23,8 +23,7 @@ namespace ChessCore::preft {
                 return 1;
 
             uint64_t nodes = 0;
-            Engine::MovePicker move_picker(pos,Move::none(),10,{},{},{},{});
-            for (Move move = move_picker.next_move();move != Move::none();move = move_picker.next_move()) {
+            for (const auto move : pos.legal_moves()) {
                 //g_path.push_back(move.to_string());
                 if (!pos.legal(move)){continue;}
                 pos.make_move(move);

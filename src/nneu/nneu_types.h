@@ -7,7 +7,7 @@
 #include "Types.h"
 #include "ChessCore/Pieces.h"
 
-namespace Engine::Eval::NNEU::types {
+namespace Engine::Eval::NNUE::types {
     constexpr int INPUT_SIZE = 768;
     constexpr int HL_SIZE    = 128;
     constexpr int QA = 255, QB = 64, SCALE = 218;

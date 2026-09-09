@@ -12,11 +12,15 @@
 #include "Engine/Eval.h"
 #include "Engine/OpeningBook.h"
 #include "Engine/PawnHash.h"
+#include "nneu/Network.h"
 
 namespace ChessCore {
     using enum PieceType;
     using Pieces::makePiece;
     using namespace Engine;
+    using namespace Eval::NNUE;
+
+    Position::Position() : Position(FenHelper::STARTING_POSITION_FEN) {}
     Position::Position(const std::string_view fen) : Position(FenHelper::fen_to_pos(fen)) {
 
     }
@@ -115,7 +119,8 @@ namespace ChessCore {
         current_state_.half_clock = half_clock;
         current_state_.pawn_key = 0;
         current_state_.non_pawn_material = {0,0};
-        current_state_.phase = 0;
+        //current_state_.phase = 0;
+        //current_state_.accumulator = &accumulator_stack_.top();
 
         for (const Color c : {Color::WHITE, Color::BLACK}) {
             BitBoard bb = color_bb(c);
@@ -124,8 +129,8 @@ namespace ChessCore {
                 const Piece p = square(s);
                 const auto ci = color_idx(c);
 
-                current_state_.material_score[ci] +=Eval::evaluate_piece(p,s);
-                current_state_.phase += Eval::phase_value(Pieces::getType(p));
+                //current_state_.material_score[ci] +=Eval::evaluate_piece(p,s);
+                //current_state_.phase += Eval::phase_value(Pieces::getType(p));
                 if (Pieces::getType(p) == PAWN) {
                     current_state_.pawn_key ^= PawnHash::hash(c,s);
                 }else if (Pieces::getType(p) != KING) {
@@ -134,6 +139,7 @@ namespace ChessCore {
             }
         }
         update_check_info();
+        accumulator_stack_.refresh(*this,net().input_layer);
         current_state_.check_bb = attackers_to(king_square(side_to_move()), all_bb()) & color_bb(~side_to_move());
         current_state_.zobrist_key = zobrist_key(true);
 
@@ -154,6 +160,7 @@ namespace ChessCore {
         //ref to old state
         const auto& st = push_state(move,captured);
         current_state_.captured = captured;
+        Accumulator& acc = accumulator_stack_.top();
         Key& zobrist_key = current_state_.zobrist_key;
         Key& pawn_key = current_state_.pawn_key;
 
@@ -180,6 +187,10 @@ namespace ChessCore {
                 const auto promo =  makePiece(move.promotion_type(), us);
                 zobrist_key ^= Engine::Zobrist::piece_key(moving, from);
                 zobrist_key ^= Engine::Zobrist::piece_key(promo, to);
+                acc.remove_piece(net().input_layer,from,moving);
+                acc.add_piece(net().input_layer,to,promo);
+
+
 
                 current_state_.non_pawn_material[color_idx(us)] += Eval::piece_value(promo);
 
@@ -187,8 +198,8 @@ namespace ChessCore {
 
                 board.remove_piece(to);
                 board.set_piece(to,promo);
-                current_state_.material_score[color_idx(us)] +=  Eval::evaluate_piece(promo,to) - Eval::evaluate_piece(moving,from);
-                current_state_.phase += Eval::phase_value(move.promotion_type());
+                //current_state_.material_score[color_idx(us)] +=  Eval::evaluate_piece(promo,to) - Eval::evaluate_piece(moving,from);
+                //current_state_.phase += Eval::phase_value(move.promotion_type());
                 break;
             }
             case MoveType::CASTLING: {
@@ -209,9 +220,11 @@ namespace ChessCore {
                 board.remove_piece(rook_start);
                 board.set_piece(rook_end, Pieces::makePiece(PieceType::ROOK, us));
                 const Piece rook = Pieces::makePiece(PieceType::ROOK, us);
-                current_state_.material_score[color_idx(us)] +=Eval::evaluate_piece(rook, rook_end) -Eval::evaluate_piece(rook, rook_start);
+                //current_state_.material_score[color_idx(us)] +=Eval::evaluate_piece(rook, rook_end) -Eval::evaluate_piece(rook, rook_start);
                 zobrist_key ^= Engine::Zobrist::piece_key(rook, rook_start);
                 zobrist_key ^= Engine::Zobrist::piece_key(rook, rook_end);
+                acc.remove_piece(net().input_layer,rook_start,rook);
+                acc.add_piece(net().input_layer,rook_end,rook);
                 break;
             }
             case MoveType::EN_PASSANT: {
@@ -250,10 +263,9 @@ namespace ChessCore {
         current_state_.half_clock = half_clock_move ? 0 : current_state_.half_clock + 1;
         if (captured != Pieces::EMPTY) {
             zobrist_key ^= Zobrist::piece_key(captured, captured_square);
-            current_state_.material_score[color_idx(them)] -= Eval::evaluate_piece(captured, captured_square);
-            current_state_.phase -= Eval::phase_value(Pieces::getType(captured));
-
-
+            acc.remove_piece(net().input_layer, captured_square,captured);
+            //current_state_.material_score[color_idx(them)] -= Eval::evaluate_piece(captured, captured_square);
+            //current_state_.phase -= Eval::phase_value(Pieces::getType(captured));
 
             if (Pieces::getType(captured) == PAWN) {
                 pawn_key ^= PawnHash::hash(them,captured_square);
@@ -262,9 +274,12 @@ namespace ChessCore {
             }
         }
         if (type != MoveType::PROMOTION) {
-            current_state_.material_score[color_idx(us)] += Eval::evaluate_piece(moving,to) - Eval::evaluate_piece(moving,from);
+            //current_state_.material_score[color_idx(us)] += Eval::evaluate_piece(moving,to) - Eval::evaluate_piece(moving,from);
             zobrist_key ^= Zobrist::piece_key(moving, from);
             zobrist_key ^= Zobrist::piece_key(moving, to);
+            acc.remove_piece(net().input_layer,from,moving);
+            acc.add_piece(net().input_layer,to,moving);
+
             if(Pieces::getType(moving) == PAWN) {
                 pawn_key ^= PawnHash::hash(us,from);
                 pawn_key ^= PawnHash::hash(us,to);
@@ -294,6 +309,7 @@ namespace ChessCore {
         --ply_;
 
         const StateInfo& st = history[ply_];
+        accumulator_stack_.pop();
 
         const Move move = st.move;
         const Square from = move.from();
@@ -378,6 +394,7 @@ namespace ChessCore {
     void Position::undo_null_move() {
         --ply_;
         const StateInfo& st = history[ply_];
+        accumulator_stack_.pop();
         current_state_ = st;
         swap_side();
     }
@@ -457,6 +474,7 @@ namespace ChessCore {
         st = current_state_;
         st.move = move;
         st.captured = captured;
+        accumulator_stack_.push();
         return st;
     }
     void Position::update_slider_blockers(const Color c)

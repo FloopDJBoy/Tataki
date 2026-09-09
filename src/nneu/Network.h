@@ -9,7 +9,7 @@
 #include "Accumulator.h"
 #include "nneu_types.h"
 
-namespace Engine::Eval::NNEU {
+namespace Engine::Eval::NNUE {
     using namespace types;
     struct alignas(64) Network {
         InputLayer input_layer;
@@ -21,6 +21,9 @@ namespace Engine::Eval::NNEU {
         const int32_t y = std::clamp<int32_t>(x, 0, QA);
         return y * y;
     }
+    namespace Details {inline Network g_net{}; }          // ~200 KB, zero-init in .bss
+    inline const Network& net() { return Details::g_net; }
+    inline void load_net(const std::filesystem::path& p) { Details::g_net.load(p); }
 }
 
 #endif //TATAKI_NETWORK_H

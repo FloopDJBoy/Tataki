@@ -1,12 +1,16 @@
 
 #pragma once
+#include <iostream>
 #include <set>
 
 #include "Board.h"
 #include "Move.h"
 #include "MoveGen.h"
 #include "Types.h"
+#include "Engine/Eval.h"
 #include "Engine/Zobrist.h"
+#include "nneu/Accumulator.h"
+#include "nneu/Network.h"
 
 namespace ChessCore {
     struct StateInfo {
@@ -26,14 +30,15 @@ namespace ChessCore {
 
         //scoring
         std::array<Value, 2> non_pawn_material;
-        std::array<ScorePair,2> material_score;
-        uint8_t phase;
+        //std::array<ScorePair,2> material_score;
+        //uint8_t phase;
         Key pawn_key;
     };
     class Position {
     public:
         static constexpr int16_t SEARCH_STACK_SIZE = MAX_PLY * 2;
     private:
+        Engine::Eval::NNUE::AccumulatorStack accumulator_stack_;
         Board board;
         StateInfo current_state_;
         std::array<StateInfo, SEARCH_STACK_SIZE> history;
@@ -44,8 +49,9 @@ namespace ChessCore {
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
     public:
+
         explicit Position(
-            const Board board,
+            Board board,
             CastlingRight cr,
             Square ep,
             Color side,
@@ -58,6 +64,7 @@ namespace ChessCore {
             return p;
         }
         explicit Position(std::string_view fen);
+        Position();
         [[nodiscard]] std::string_view fen() const;
 
 
@@ -80,6 +87,7 @@ namespace ChessCore {
         [[nodiscard]] constexpr BitBoard all_bb() const { return board.all_piece_bitboard; }
         [[nodiscard]] constexpr Square ep_square() const { return current_state_.ep_square; }
         [[nodiscard]] BitBoard  piece_bb(const PieceType p) const { return piece_bb(Pieces::makePiece(p,Color::WHITE)) | piece_bb(Pieces::makePiece(p,Color::BLACK)); }
+        [[nodiscard]] const Engine::Eval::NNUE::Accumulator& accumulator() const { return accumulator_stack_.top(); }
 
 
         [[nodiscard]] BitBoard check_squares(const PieceType p) const {return state().check_squares[static_cast<int>(p)];}
@@ -163,6 +171,11 @@ namespace ChessCore {
 #ifndef NDEBUG
         void verify_zobrist() const {
             assert(current_state_.zobrist_key == zobrist_key(true));
+        }
+        void verify_accumulator() const {
+            Engine::Eval::NNUE::Accumulator ref{};
+            ref.refresh(*this, Engine::Eval::NNUE::net().input_layer);
+            assert(ref.vals == accumulator_stack_.top().vals);
         }
 #endif
         [[nodiscard]] int ply() const {return ply_ - root_ply_;}

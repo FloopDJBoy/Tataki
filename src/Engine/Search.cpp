@@ -95,7 +95,7 @@ namespace Engine {
             }
         }
         if constexpr (!in_check) {
-            const Score stand_pat = Eval::evaluate(pos,&pawn_tt,alpha,beta);
+            const Score stand_pat = Eval::evaluate(pos);
             if (stand_pat >= beta) {
                 if (!tt_entry) {
                     tt.insert(zobrist_key,TranspositionTable::value_to_tt(stand_pat, pos.ply()),QSEARCH_DEPTH,Move::none(),Bound::LOWER,false);
@@ -284,7 +284,7 @@ namespace Engine {
             }
         }
 
-        ss->static_eval = in_check? (ss - 2)->static_eval : Eval::evaluate(pos, &pawn_tt, Eval::NEG_INF, Eval::INF);
+        ss->static_eval = in_check? (ss - 2)->static_eval : Eval::evaluate(pos);
         const bool improving = ss->static_eval > (ss - 2)->static_eval;
         //RFP
         if (!PvNode

@@ -3,8 +3,10 @@
 //
 
 #include "Accumulator.h"
+#include "ChessCore/BitBoards.h"
+#include <ChessCore/Position.h>
 
-namespace Engine::Eval::NNEU {
+namespace Engine::Eval::NNUE {
     void Accumulator::refresh(const ChessCore::Position &pos, const types::InputLayer &input_layer, const Color c) {
         using namespace ChessCore;
         using namespace types;
@@ -33,4 +35,5 @@ namespace Engine::Eval::NNEU {
         for (int i = 0; i < InputLayer::output_size; ++i)
             acc[i] -= w[i];
     }
+    AccumulatorStack::AccumulatorStack() :stack_(std::make_unique<Accumulator[]>(ChessCore::Position::SEARCH_STACK_SIZE)) {}
 }

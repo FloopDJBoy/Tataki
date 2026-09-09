@@ -119,6 +119,5 @@ namespace ChessCore::FenHelper {
         const auto pos = Position(board,rights,en_square,side,half_clock,full_move_clock);
         return pos;
     }
-    inline const Position STARTING_POSITION = fen_to_pos(STARTING_POSITION_FEN);
-    inline const Position KIWIPETE = fen_to_pos(KIWIPETE_FEN);
+
 } // ChessCore

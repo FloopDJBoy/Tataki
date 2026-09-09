@@ -42,7 +42,7 @@ namespace Engine {
             const ChessCore::Position* pos = nullptr
         )
             : book(book_path),
-              position(pos ? *pos : ChessCore::FenHelper::STARTING_POSITION),
+              position(pos ? *pos : ChessCore::Position(ChessCore::FenHelper::STARTING_POSITION_FEN) ),
               continuation_history(std::make_unique<History::ContinuationHistory>()){
             for (auto& a : capture_history) {
                 for (auto& b : a) {
@@ -63,7 +63,7 @@ namespace Engine {
         explicit Engine(
            const ChessCore::Position* pos = nullptr
        ) :
-             position(pos ? *pos : ChessCore::FenHelper::STARTING_POSITION),
+             position(pos ? *pos : ChessCore::Position(ChessCore::FenHelper::STARTING_POSITION_FEN)),
              continuation_history(std::make_unique<History::ContinuationHistory>()){
             for (auto& a : capture_history) {
                 for (auto& b : a) {
@@ -118,6 +118,7 @@ namespace Engine {
         bool is_finished() const;
         ChessCore::Move best_move() const;
         Score search_score() const;
+        [[nodiscard]] ChessCore::Position get_position() const{ return position; }
         [[nodiscard]] uint64_t nodes() const { return total_nodes.load(std::memory_order_relaxed); }
         void reset_nodes() { total_nodes.store(0, std::memory_order_relaxed); }
         

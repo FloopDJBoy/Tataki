@@ -314,7 +314,7 @@ namespace Engine::Eval {
         return phase_arr[static_cast<int>(p)];
     }
     Score evaluate(const ChessCore::Position& pos);
-    Score evaluate(const ChessCore::Position& pos,PawnTT* pawn_tt,Score alpha,Score beta);
+    //Score evaluate(const ChessCore::Position& pos,PawnTT* pawn_tt,Score alpha,Score beta);
     inline ScorePair evaluate_piece(const Piece piece, const Square s){
         return PSQT[piece][s];
     }

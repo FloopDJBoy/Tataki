@@ -10,7 +10,7 @@
 
 #include "Engine/Eval.h"
 
-namespace Engine::Eval::NNEU {
+namespace Engine::Eval::NNUE {
     Score Network::evaluate(const Accumulator& acc, const Color stm) const {
         const int16_t* us   = acc[stm];
         const int16_t* them = acc[~stm];

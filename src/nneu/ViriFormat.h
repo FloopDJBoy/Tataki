@@ -7,7 +7,7 @@
 #include "ChessCore/FenHelper.h"
 #include "ChessCore/Position.h"
 
-namespace Engine::Eval::NNEU::ViriFormat {
+namespace Engine::Eval::NNUE::ViriFormat {
     // Marlinformat: pawn 0, knight 1, bishop 2, rook 3, queen 4, king 5.
     // Ours:         PAWN 1, KNIGHT 2, BISHOP 3, ROOK  4, QUEEN 5, KING 6.  -> subtract 1.
     // Colour: Color::BLACK == 8 is already bit 3 of the nibble, so it ORs in directly.
