@@ -34,6 +34,9 @@ namespace Engine::Eval::NNUE {
     private:
         void add_feature(const types::InputLayer &input_layer,  Square square, Piece p,  Color c);
         void remove_feature(const types::InputLayer &input_layer,  Square square, Piece p,  Color c);
+        void add_sub(const Accumulator& parent, const types::InputLayer& il,int add, int sub, Color c);
+        void add_sub_sub(const Accumulator& parent, const types::InputLayer& il,int add,  int sub1,  int sub2,  Color c);
+        void add_add_sub_sub(const Accumulator& parent, const types::InputLayer& il,int a1,  int a2,int s1,  int s2,  Color c);
     };
     class AccumulatorStack {
         std::unique_ptr<Accumulator[]> stack_;

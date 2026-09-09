@@ -89,6 +89,12 @@ add_executable(Tataki
 if (MSVC)
     target_link_options(${PROJECT_NAME} PRIVATE /STACK:16777216)
 endif()
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(MSVC)
+    target_compile_options(Tataki PRIVATE /arch:AVX2)
+else()
+    target_compile_options(Tataki PRIVATE -mavx2)
+endif()
 target_compile_definitions(Tataki PRIVATE
         ENGINE_NAME="${ENGINE_NAME}"
         ENGINE_VERSION="${ENGINE_VERSION}"
