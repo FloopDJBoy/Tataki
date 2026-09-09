@@ -105,5 +105,48 @@ namespace Engine::Eval::NNUE {
             st(dst + i, v);
         }
     }
+    void AccumulatorStack::push_move(const InputLayer& il, const ChessCore::Position& pos, const ChessCore::Move m) {
+        using namespace ChessCore;
+        if (m == Move::null()) {
+            push_null();
+            return;
+        }
+        const Square from = m.from(), to = m.to();
+        const Color  us   = pos.side_to_move();
+        const Piece  moved = pos.square(from);
+        const Accumulator& parent = stack_[index_];
+        Accumulator& child = stack_[index_ + 1];
+
+        switch (m.get_type()) {
+            case MoveType::NORMAL: {
+                const Piece cap = pos.square(to);
+                if (cap == Pieces::EMPTY) child.move_piece(parent, il, from, to, moved,moved);
+                else                      child.capture_piece(parent, il, from, to, moved, moved, to, cap);
+                break;
+            }
+            case MoveType::PROMOTION: {
+                const Piece promo = Pieces::makePiece(m.promotion_type(), us);
+                const Piece cap   = pos.square(to);
+                if (cap == Pieces::EMPTY) child.move_piece(parent, il, from, to, moved, promo);
+                else                      child.capture_piece(parent, il, from, to, moved, promo, to, cap);
+                break;
+            }
+            case MoveType::EN_PASSANT: {
+                const int offset = (us == Color::WHITE) ? 8 : -8;
+                const Square cap_sq = to - offset;
+                child.capture_piece(parent, il, from, to, moved, moved,
+                                    cap_sq, Pieces::makePiece(PieceType::PAWN, ~us));
+                break;
+            }
+            case MoveType::CASTLING: {
+                const Square rook_from = from == e1 ? (to == g1 ? h1 : a1) : (to == g8 ? h8 : a8);
+                const Square rook_to   = us == Color::WHITE ? (rook_from == a1 ? d1 : f1)
+                                                            : (rook_from == a8 ? d8 : f8);
+                child.do_castling(parent, il, from, to, rook_from, rook_to, us);
+                break;
+            }
+        }
+        ++index_;
+    }
     AccumulatorStack::AccumulatorStack() :stack_(std::make_unique<Accumulator[]>(ChessCore::Position::SEARCH_STACK_SIZE)) {}
 }

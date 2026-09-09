@@ -160,7 +160,6 @@ namespace ChessCore {
         //ref to old state
         const auto& st = push_state(move,captured);
         current_state_.captured = captured;
-        Accumulator& acc = accumulator_stack_.top();
         Key& zobrist_key = current_state_.zobrist_key;
         Key& pawn_key = current_state_.pawn_key;
 
@@ -187,8 +186,7 @@ namespace ChessCore {
                 const auto promo =  makePiece(move.promotion_type(), us);
                 zobrist_key ^= Engine::Zobrist::piece_key(moving, from);
                 zobrist_key ^= Engine::Zobrist::piece_key(promo, to);
-                acc.remove_piece(net().input_layer,from,moving);
-                acc.add_piece(net().input_layer,to,promo);
+
 
 
 
@@ -223,8 +221,7 @@ namespace ChessCore {
                 //current_state_.material_score[color_idx(us)] +=Eval::evaluate_piece(rook, rook_end) -Eval::evaluate_piece(rook, rook_start);
                 zobrist_key ^= Engine::Zobrist::piece_key(rook, rook_start);
                 zobrist_key ^= Engine::Zobrist::piece_key(rook, rook_end);
-                acc.remove_piece(net().input_layer,rook_start,rook);
-                acc.add_piece(net().input_layer,rook_end,rook);
+
                 break;
             }
             case MoveType::EN_PASSANT: {
@@ -263,7 +260,6 @@ namespace ChessCore {
         current_state_.half_clock = half_clock_move ? 0 : current_state_.half_clock + 1;
         if (captured != Pieces::EMPTY) {
             zobrist_key ^= Zobrist::piece_key(captured, captured_square);
-            acc.remove_piece(net().input_layer, captured_square,captured);
             //current_state_.material_score[color_idx(them)] -= Eval::evaluate_piece(captured, captured_square);
             //current_state_.phase -= Eval::phase_value(Pieces::getType(captured));
 
@@ -277,8 +273,7 @@ namespace ChessCore {
             //current_state_.material_score[color_idx(us)] += Eval::evaluate_piece(moving,to) - Eval::evaluate_piece(moving,from);
             zobrist_key ^= Zobrist::piece_key(moving, from);
             zobrist_key ^= Zobrist::piece_key(moving, to);
-            acc.remove_piece(net().input_layer,from,moving);
-            acc.add_piece(net().input_layer,to,moving);
+
 
             if(Pieces::getType(moving) == PAWN) {
                 pawn_key ^= PawnHash::hash(us,from);
@@ -474,7 +469,7 @@ namespace ChessCore {
         st = current_state_;
         st.move = move;
         st.captured = captured;
-        accumulator_stack_.push();
+        accumulator_stack_.push_move(net().input_layer,*this,move);
         return st;
     }
     void Position::update_slider_blockers(const Color c)
