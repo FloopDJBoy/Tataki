@@ -5,14 +5,21 @@
 
 #include "UCI.h"
 #include "ChessCore/FenHelper.h"
+#include "Engine/Engine.h"
+#include "Engine/Eval.h"
 #include "Engine/History.h"
 #include "Engine/MovePicker.h"
+#include "misc/FitScale.h"
 #include "misc/LazyStats.h"
 #include "misc/preft.h"
 #include "misc/pgn_extract.h"
+#include "nneu/Accumulator.h"
+#include "nneu/FilterData.h"
+#include "nneu/Network.h"
+#include "nneu/ViriFormat.h"
 
 
-bool check_move_picker(const ChessCore::Position& pos, const ChessCore::Move tt,
+static bool check_move_picker(const ChessCore::Position& pos, const ChessCore::Move tt,
                               const int depth, const Engine::History::CaptureHistory& ch,
                               const Engine::History::ButterflyHistory& bh,const std::array<ChessCore::Move,2>& killers) {
     using namespace ChessCore;
@@ -43,14 +50,36 @@ bool check_move_picker(const ChessCore::Position& pos, const ChessCore::Move tt,
     return false;
 }
 int main(int argc, char *argv[]) {
-    //QApplication app(argc, argv);
-    //auto pos = ChessCore::Position(ChessCore::FenHelper::fen_to_pos("8/5R2/8/k7/2B5/5p1K/1R6/8 b - - 0 45"));
-    //std::string s1 = ENGINE_NAME;
-    //s1 += " v0.3.0";
-    //std::string s2 = ENGINE_NAME;
-    //s2 += " v0.2.7";
     //const std::string edp = R"(E:\lichess-big3-resolved\lichess-big3-resolved.book)";
     //Engine::LazyTuning::run_lazy_tuning(edp);
-    UCI::loop(argc,argv);
+    //Engine::Eval::NNEU::FilterData::pgn_to_viriformat_mt(R"(E:\fastchess-windows-x86-64\fastchess-windows-x86-64\5k_soft_self_gen)",R"(E:\traning_data\set1.vf)",15);
+    //FitScale::fit_scale(R"(E:\fastchess-windows-x86-64\fastchess-windows-x86-64\5k_soft_self_gen)",15);
+    //std::cout << Engine::Eval::NNEU::ViriFormat::self_test();
+    ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
+    Engine::Eval::NNEU::Network net{};
+    net.load(R"(E:\bullet\target\release\checkpoints\simple-40\quantised.bin)");
+    constexpr std::array benchmark_positions = {
+        #include "bench.csv"
+    };
+    Engine::Eval::NNEU::Accumulator acc{};
+    std::vector<std::tuple<std::string,Score,Score,Score>> res;
+    Engine::Engine engine;
+    engine.enable_book(false);
+    constexpr Engine::SearchLimits limits={.depth=15};
+
+    for (auto& fen : benchmark_positions) {
+        pos = ChessCore::Position(fen);
+        acc.refresh(pos,net.input_layer);
+        engine.set_position(pos);
+        engine.go(limits);
+        engine.wait_until_search_finished();
+        res.emplace_back(fen,net.evaluate(acc,pos.side_to_move()),Engine::Eval::evaluate(pos),engine.search_score());
+    }
+    for (auto& [fen,nn_score,hce_score,d15_score] : res) {
+        std::cout << fen << " nneu: " << nn_score << " hce: " << hce_score << " depth 15 hce: " << d15_score << std::endl;
+    }
+
+
+    //UCI::loop(argc,argv);
     return 0;
 }

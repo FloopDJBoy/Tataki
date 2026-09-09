@@ -34,21 +34,14 @@ namespace Engine {
 
 
         search_thread = std::jthread([this] {
-            ////std::cerr << "A: search thread started\n";
-            ////print_time();
-            const auto move = searcher->find_best_move();
-            ////std::cerr << "B: find_best_move returned\n";
-            ////print_time();
+            const auto [move,score] = searcher->find_best_move();
             {
                 std::lock_guard lock(mutex);
                 total_nodes.fetch_add(searcher->node_count(), std::memory_order_relaxed);
                 best_move_ = move;
+                score_ = score;
             }
-            //std::cerr << "C: best_move stored\n";
-            //print_time();
             finish_search();
-            //std::cerr << "D: finish_search returned\n";
-            //print_time();
         });
     }
 
@@ -74,24 +67,22 @@ namespace Engine {
         //print_time();
         searching.store(false, std::memory_order_relaxed);
         const auto move = best_move();
-        //std::cerr << "F: best_move obtained\n";
-        //print_time();
+        const auto score = search_score();
         if (on_search_finished_) {
-            //std::cerr << "G: callback\n";
-            //print_time();
-            on_search_finished_(move);
+            on_search_finished_(move,score);
         }
-        //std::cerr << "H: callback returned\n";
-        //print_time();
         cv_.notify_all();
-        //std::cerr << "I: finish_search done\n";
-        //print_time();
     }
 
     ChessCore::Move Engine::best_move() const
     {
         std::lock_guard lock(mutex);
         return best_move_;
+    }
+
+    Score Engine::search_score() const {
+        std::lock_guard lock(mutex);
+        return score_;
     }
 
     void Engine::set_position(const ChessCore::Position& pos)

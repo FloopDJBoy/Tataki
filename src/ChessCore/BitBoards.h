@@ -126,6 +126,10 @@ namespace ChessCore::BitBoards {
         std::array<std::array<BitBoard, 64>, 2> backward_masks{};
         std::array<BitBoard, 64> adjacent_files{};
     };
+
+    constexpr BitBoard symbol_to_file(const char file) {
+        return file_of(cord_to_square(file -'a',0));
+    }
     constexpr PawnMasks make_pawn_masks() {
         PawnMasks masks{};
         for (int s = 0; s < 64; ++s) {

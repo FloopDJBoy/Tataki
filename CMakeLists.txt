@@ -75,6 +75,16 @@ add_executable(Tataki
         src/Engine/History.h
         src/Engine/MovePicker.cpp
         src/Engine/MovePicker.h
+        src/nneu/FilterData.cpp
+        src/nneu/FilterData.h
+        src/nneu/Accumulator.cpp
+        src/nneu/Accumulator.h
+        src/nneu/nneu_types.h
+        src/nneu/Network.cpp
+        src/nneu/Network.h
+        src/nneu/ViriFormat.h
+        src/misc/FitScale.cpp
+        src/misc/FitScale.h
 )
 if (MSVC)
     target_link_options(${PROJECT_NAME} PRIVATE /STACK:16777216)

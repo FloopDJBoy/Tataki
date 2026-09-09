@@ -70,7 +70,7 @@ namespace Engine {
             return 0;
         }
 
-        if (pos.ply() >= PV::MAX_PLY - 1)
+        if (pos.ply() >= MAX_PLY - 1)
             return Eval::evaluate(pos);
 
         if (pos.is_draw()) {
@@ -237,7 +237,7 @@ namespace Engine {
         if (stop.load(std::memory_order_relaxed)) return 0;
 
         if constexpr (!RootNode) {
-            if (pos.ply() >= PV::MAX_PLY - 1) return Eval::evaluate(pos);
+            if (pos.ply() >= MAX_PLY - 1) return Eval::evaluate(pos);
             if (pos.is_draw()) return 0;
         }
 
@@ -624,7 +624,7 @@ namespace Engine {
             if (delta > ASP_MAX_DELTA) { alpha = -Eval::INF; beta = Eval::INF; }
         }
     }
-    Move Search::find_best_move() {
+    SearchResult Search::find_best_move() {
 
         nodes = 0;
         Move best_move = Move::none(),last_best_move = Move::none();
@@ -637,7 +637,7 @@ namespace Engine {
         }
         //forced move no need to think
         if (root_moves.size() == 1 && !limits.infinite && limits.depth == 0 && limits.nodes == 0) {
-            return root_moves[0];
+            return {.move = root_moves[0],.score = Eval::NO_SCORE};
         }
 
         tt.new_search();
@@ -653,7 +653,7 @@ namespace Engine {
 
         constexpr std::array STABILITY_SCALE = {1.30, 1.15, 1.00, 0.90, 0.80}; // placeholder table, indexed by min(stability,4)
 
-        for (int depth = 1;depth<PV::MAX_PLY; ++depth) {
+        for (int depth = 1;depth<MAX_PLY; ++depth) {
             if (should_stop()) {
                 stop_search();
                 break;
@@ -676,7 +676,7 @@ namespace Engine {
             const auto nps = nodes * 1000 / time_ms;
 
             if (stop.load(std::memory_order_relaxed)) {
-                return best_move;
+                return {.move = best_move,.score = score};
             }
             prev_score = score;
             if (move != Move::none()) {
@@ -713,18 +713,18 @@ namespace Engine {
             std::cout << '\n';
 
             if (limits.depth && depth >= limits.depth) {
-                return best_move;
+                return {best_move,score};
             }
             if (soft_limit != Duration::max()) {
                 const auto scaled = Duration{ static_cast<int64_t>(soft_limit.count() * STABILITY_SCALE[stability]) };
-                if (elapsed >= scaled) return best_move;
+                if (elapsed >= scaled) return {best_move,score};
             }
             if (limits.nodes_soft && nodes >= limits.nodes_soft) {
-                return best_move;
+                return {best_move,score};
             }
         }
 
-        return best_move;
+        return {.move = best_move,.score = prev_score};
     }
 
 

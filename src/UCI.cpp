@@ -276,7 +276,7 @@ namespace UCI {
 
         ChessCore::Position pos(ChessCore::FenHelper::STARTING_POSITION_FEN);
         //std::cerr << pos.fen() << std::endl;
-        engine.on_search_finished([](const ChessCore::Move move) {
+        engine.on_search_finished([](const ChessCore::Move move,const Score) {
                    std::cout << "bestmove "
                              << move.to_string()
                              << std::endl;

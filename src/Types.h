@@ -103,6 +103,8 @@ constexpr int SQUARE_NUMBER = 64;
 constexpr int PIECE_NUMBER = 15; //such that you can do arr[piece]
 constexpr int PT_NUMBER = 7; //including empty
 
+constexpr int MAX_PLY = 256;
+
 
 
 constexpr Square NO_SQUARE = 255;

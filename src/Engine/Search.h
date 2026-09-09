@@ -27,7 +27,6 @@ namespace Engine {
         Score score;
     };
     struct PV {
-        static constexpr uint32_t MAX_PLY = 256;
         ChessCore::Move moves[MAX_PLY];
         uint32_t length = 0;
 
@@ -131,7 +130,7 @@ namespace Engine {
         const SearchLimits limits;
         constexpr static int search_time_margin=100;
         std::atomic_bool stop{false};
-        SearchStack stack[PV::MAX_PLY + 10]{};
+        SearchStack stack[MAX_PLY + 10]{};
         TranspositionTable& tt;
         History::CaptureHistory& capture_history;
         History::ButterflyHistory& butterfly_history;
@@ -170,7 +169,7 @@ namespace Engine {
         continuation_history(continuation_history),
         pawn_tt(pawn_t)
         {};
-        ChessCore::Move find_best_move();
+        SearchResult find_best_move();
 
     };
 } // Engine

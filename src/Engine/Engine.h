@@ -28,9 +28,10 @@ namespace Engine {
         std::jthread search_thread;
 
         ChessCore::Move best_move_;
+        Score score_ = Eval::NO_SCORE;
         std::atomic_bool searching = false;
         mutable std::mutex mutex;
-        std::function<void(ChessCore::Move)> on_search_finished_;
+        std::function<void(ChessCore::Move,Score)> on_search_finished_;
         mutable std::condition_variable cv_;
 
         void finish_search();
@@ -106,7 +107,7 @@ namespace Engine {
         void set_book(const std::string& book_path){book = OpeningBook(book_path);}
         void enable_book(const bool enable) {enable_book_ = enable;}
         void set_position(const ChessCore::Position& pos);
-        void on_search_finished(const std::function<void(ChessCore::Move)> &callback) {on_search_finished_ = callback;}
+        void on_search_finished(const std::function<void(ChessCore::Move,Score score)> &callback) {on_search_finished_ = callback;}
 
         void set_tt_size(const size_t megabytes) {
             tt = TranspositionTable(megabytes);
@@ -116,6 +117,7 @@ namespace Engine {
         void wait_until_search_finished() const;
         bool is_finished() const;
         ChessCore::Move best_move() const;
+        Score search_score() const;
         [[nodiscard]] uint64_t nodes() const { return total_nodes.load(std::memory_order_relaxed); }
         void reset_nodes() { total_nodes.store(0, std::memory_order_relaxed); }
         

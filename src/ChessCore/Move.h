@@ -20,6 +20,7 @@ namespace ChessCore {
         static constexpr uint16_t FROM_MASK = 0xFC0;
         static constexpr uint16_t PROMO_MASK = 0x3000;
         static constexpr uint16_t TYPE_MASK = 0xC000;
+        static constexpr uint16_t VIRI_TYPE[4] = { 0, 3, 1, 2 };
     public:
         Move() = default;
         explicit constexpr Move(const uint16_t data) : data(data) {}
@@ -92,6 +93,32 @@ namespace ChessCore {
         [[nodiscard]] constexpr uint16_t raw() const
         {
             return data;
+        }
+        [[nodiscard]]
+        constexpr uint16_t to_viri() const {
+            const uint16_t fr = from();
+            uint16_t t = to();
+
+            if (get_type() == MoveType::CASTLING)
+                t = (t == g1) ? h1 : (t == c1) ? a1 : (t == g8) ? h8 : a8;
+
+            const uint16_t promo = (raw() >> 12) & 0b11;   // already viri-ordered
+            const uint16_t type  = VIRI_TYPE[static_cast<uint16_t>(get_type()) >> 14];
+
+            return fr | (t << 6) | (promo << 12) | (type << 14);
+        }
+        [[nodiscard]]
+        constexpr static uint16_t to_viri(const Move m) {
+            const uint16_t from = m.from();
+            uint16_t to = m.to();
+
+            if (m.get_type() == MoveType::CASTLING)
+                to = (to == g1) ? h1 : (to == c1) ? a1 : (to == g8) ? h8 : a8;
+
+            const uint16_t promo = (m.raw() >> 12) & 0b11;   // already viri-ordered
+            const uint16_t type  = VIRI_TYPE[static_cast<uint16_t>(m.get_type()) >> 14];
+
+            return from | (to << 6) | (promo << 12) | (type << 14);
         }
     };
     static_assert(sizeof(Move) == sizeof(uint16_t));

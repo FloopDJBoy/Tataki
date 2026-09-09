@@ -21,7 +21,7 @@ namespace ChessCore {
 
     }
     std::string_view Position::fen() const {
-        static thread_local std::string result;
+        thread_local std::string result;
         result.clear();
 
         // Board
@@ -139,7 +139,7 @@ namespace ChessCore {
 
     }
     //move is assume legal
-    void Position::make_move(const Move move,bool gives_check) {
+    void Position::make_move(const Move move, const bool gives_check) {
 
         const Square from = move.from();
         const Square to = move.to();
@@ -510,8 +510,6 @@ namespace ChessCore {
         current_state_.check_squares[static_cast<int>(ROOK)] = rook;
         current_state_.check_squares[static_cast<int>(QUEEN)] = rook | bishop;
         current_state_.check_squares[static_cast<int>(KING)] = 0;
-
-
     }
 
     BitBoard Position::attackers_to(Square s, BitBoard occupancy) const
@@ -752,16 +750,16 @@ namespace ChessCore {
 
 
     Move Position::parse_move(const std::string& move_string) const {
-        auto from_name = magic_enum::enum_cast<SquareName>(move_string.substr(0,2));
-        auto to_name   = magic_enum::enum_cast<SquareName>(move_string.substr(2,2));
+        const auto from_name = magic_enum::enum_cast<SquareName>(move_string.substr(0,2));
+        const auto to_name   = magic_enum::enum_cast<SquareName>(move_string.substr(2,2));
 
         if (!from_name || !to_name)
             return Move::none();
 
-        Square from = *from_name;
-        Square to   = *to_name;
+        const Square from = *from_name;
+        const Square to   = *to_name;
 
-        PieceType promo = EMPTY;
+        auto promo = EMPTY;
 
         if (move_string.size() == 5)
             promo = Pieces::getType(Pieces::symbol_to_piece(move_string[4]));

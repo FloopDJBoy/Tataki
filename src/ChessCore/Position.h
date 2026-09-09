@@ -31,19 +31,21 @@ namespace ChessCore {
         Key pawn_key;
     };
     class Position {
-        static constexpr int16_t MAX_PLY = 512;
+    public:
+        static constexpr int16_t SEARCH_STACK_SIZE = MAX_PLY * 2;
+    private:
         Board board;
         StateInfo current_state_;
-        std::array<StateInfo, MAX_PLY> history;
+        std::array<StateInfo, SEARCH_STACK_SIZE> history;
         Color side_to_move_ = Color::WHITE;
         int16_t ply_;
         int16_t root_ply_ = 0; // ply_ value when this copy was handed to Search
         int32_t fullmove_number_;
         void update_slider_blockers(Color c) ;
         [[nodiscard]] Key zobrist_key (bool from_scratch) const;
-        public:
+    public:
         explicit Position(
-            Board board,
+            const Board board,
             CastlingRight cr,
             Square ep,
             Color side,
@@ -85,7 +87,11 @@ namespace ChessCore {
         [[nodiscard]] BitBoard checkers() const {return state().check_bb;}
         [[nodiscard]] BitBoard blockers_for_king(const Color c) const {return state().blockers_for_king[color_idx(c)];}
 
+        [[nodiscard]] int fullmove_number() const {return fullmove_number_;}
+
         bool try_make_move(Move move);
+        [[nodiscard]] std::set<Square> get_moves_squares(Square s) const;
+
 
 
         template<Color Side>
@@ -101,25 +107,40 @@ namespace ChessCore {
         inline const StateInfo& push_state(Move move, Piece captured);
         void handle_castling_rights(Move move);
         [[nodiscard]] bool legal(Move move) const;
-        [[nodiscard]] std::set<Square> get_moves_squares(Square s) const;
+
+
+
+
         void update_check_info();
+        [[nodiscard]] BitBoard attackers_to(Square s , BitBoard occupancy) const;
+        [[nodiscard]] BitBoard pinners(const Color c) const {return state().pinners[color_idx(c)];}
+
+
         [[nodiscard]] Move parse_move(const std::string & move_string) const;
         [[nodiscard]] Move parse_move(Square from, Square to, PieceType promo) const;
-        [[nodiscard]] BitBoard attackers_to(Square s , BitBoard occupancy) const;
+
         [[nodiscard]] bool see_ge(Move move,int threshold = 0) const;
         [[nodiscard]] Key polyglot_hash() const;
+
         [[nodiscard]] auto legal_moves() const {return MoveGen::MoveList<MoveGen::GenType::LEGAL>(*this);}
         [[nodiscard]] auto quiescence_moves() const {return MoveGen::MoveList<MoveGen::GenType::CAPTURES>(*this);} //moves are pseudo_legal
         [[nodiscard]] auto evasion_moves() const {return MoveGen::MoveList<MoveGen::GenType::EVASIONS>(*this);}
+
+
         template<MoveGen::GenType type>
         [[nodiscard]] auto generate_moves() const {return MoveGen::MoveList<type>(*this);}
+
+
         [[nodiscard]] bool in_check() const {return checkers();}
+
         [[nodiscard]] Key zobrist_key() const {return zobrist_key(false);}
+        [[nodiscard]] Key prefetch_key(Move move) const;
+
         [[nodiscard]] Key pawn_key() const {return state().pawn_key;}
+
         [[nodiscard]] bool is_3fold() const {return state().repetition >= 1;}
         [[nodiscard]] bool is_insufficient_material() const;
-        [[nodiscard]] BitBoard pinners(const Color c) const {return state().pinners[color_idx(c)];}
-        [[nodiscard]] Key prefetch_key(Move move) const;
+
         [[nodiscard]] bool is_draw() const {return is_3fold() || (state().half_clock>=100 && (!in_check() || !MoveGen::MoveList<MoveGen::GenType::LEGAL>(*this).empty())) || is_insufficient_material();}
         [[nodiscard]] bool is_capture(const Move move) const {
             const MoveType mt = move.get_type();
@@ -132,9 +153,12 @@ namespace ChessCore {
             }
             return mt == MoveType::EN_PASSANT;
         }
+
         [[nodiscard]] Value non_pawn_material(const Color c) const {return state().non_pawn_material[color_idx(c)];}
         [[nodiscard]] Value non_pawn_material() const {return non_pawn_material(Color::WHITE) + non_pawn_material(Color::BLACK);}
+
         [[nodiscard]] bool gives_check(Move move) const;
+
         [[nodiscard]] const StateInfo& previous() const {assert(ply_!=0);return history[ply_-1];}
 #ifndef NDEBUG
         void verify_zobrist() const {
